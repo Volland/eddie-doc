@@ -1,0 +1,160 @@
+{
+  "name": "eddie-doc",
+  "displayName": "Eddie Doc — AsciiDoc PDF Review",
+  "description": "Map annotations from an editor's PDF back onto your AsciiDoc source: highlights, strikethroughs, comments and inserted text become navigable, resolvable review items in the editor.",
+  "version": "0.1.0",
+  "publisher": "pavlyshyn",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "asciidoc",
+    "pdf",
+    "annotations",
+    "review",
+    "editing"
+  ],
+  "activationEvents": [
+    "onLanguage:asciidoc",
+    "workspaceContains:**/*.adoc",
+    "workspaceContains:**/*.asciidoc"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "eddieDoc.openReview",
+        "title": "Eddie Doc: Open PDF Review for AsciiDoc",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "eddieDoc.refresh",
+        "title": "Eddie Doc: Re-map Annotations",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "eddieDoc.nextAnnotation",
+        "title": "Eddie Doc: Next Annotation",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "eddieDoc.prevAnnotation",
+        "title": "Eddie Doc: Previous Annotation",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "eddieDoc.toggleResolved",
+        "title": "Eddie Doc: Toggle Resolved",
+        "icon": "$(check)"
+      },
+      {
+        "command": "eddieDoc.revealAnnotation",
+        "title": "Eddie Doc: Reveal in Source"
+      },
+      {
+        "command": "eddieDoc.relink",
+        "title": "Eddie Doc: Re-link to Current Cursor Line",
+        "icon": "$(link)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "eddieDoc",
+          "title": "Eddie Doc",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "eddieDoc": [
+        {
+          "id": "eddieDoc.annotations",
+          "name": "PDF Annotations",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "eddieDoc.annotations",
+        "contents": "No review loaded.\nOpen an annotated PDF and map its comments onto the active .adoc file.\n[Open PDF Review](command:eddieDoc.openReview)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "eddieDoc.openReview",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@1"
+        },
+        {
+          "command": "eddieDoc.refresh",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "eddieDoc.toggleResolved",
+          "when": "view == eddieDoc.annotations && viewItem == annotation",
+          "group": "inline@1"
+        },
+        {
+          "command": "eddieDoc.relink",
+          "when": "view == eddieDoc.annotations && viewItem == annotation",
+          "group": "inline@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "eddieDoc.openReview",
+          "when": "editorLangId == asciidoc || resourceExtname == .adoc || resourceExtname == .asciidoc",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Eddie Doc",
+      "properties": {
+        "eddieDoc.matchThreshold": {
+          "type": "number",
+          "default": 0.55,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum similarity (0-1) for an annotation to be auto-linked to a source line. Below this it is marked 'unmatched'."
+        },
+        "eddieDoc.showResolved": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show resolved annotations in the tree and as decorations."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "compile-tests": "tsc -p . --outDir out",
+    "typecheck": "tsc --noEmit -p .",
+    "pretest": "npm run compile-tests",
+    "test": "mocha \"out/test/**/*.test.js\"",
+    "cli": "node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.2",
+    "mocha": "^10.4.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.0.379"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"node dist/cli.js sample/chapter-01.annotated.pdf sample/chapter-01.adoc --json 2>/dev/null > /tmp/eddie-items.json\\ncat > sample/_inspect.cjs <<'EOF'\\nconst items = require(\\\"/tmp/eddie-it...",
+  "error": "Exit code 1\nnode:internal/modules/cjs/loader:1854\n    throw err;\n    ^\n\nSyntaxError: /private/tmp/eddie-items.json: Unexpected token 'W', \"Warning: C\"... is not valid JSON\n    at parse (<anonymous>)\n    at Object..json (node:internal/modules/cjs/loader:1851:39)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/...",
+  "timestamp": "2026-07-02T18:34:42.131Z",
+  "retry_count": 2
+}

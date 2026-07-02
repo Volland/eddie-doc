@@ -1,0 +1,37 @@
+= Chapter One: The Nature of Knowledge Graphs
+:doctype: book
+
+== Introduction
+
+A knowledge graph is a structured representation of information where entities
+are connected by well-defined relationships. Unlike a relational database, a
+graph places relationships at the center of the model.
+
+This chapter introduces the core ideas that the rest of the book builds upon.
+We will move from simple triples to richer metagraph structures.
+
+== Entities and Relationships
+
+An *entity* is any distinct thing we wish to describe: a person, a place, a
+concept, or an event. Each entity is given a stable identifier so that facts
+about it can be gathered from many sources.
+
+A relationship connects two entities and carries its own meaning. The phrase
+"Alice knows Bob" is a single relationship with a clear direction and type.
+
+TIP: Model relationships explicitly rather than hiding them inside attributes.
+
+== Reification
+
+Reification lets us make statements about statements. When we need to attach a
+confidence score or a provenance record to a fact, we treat the fact itself as
+a node that other edges can point to.
+
+This is the foundation for metagraphs, where an edge may connect not only
+entities but also other edges and entire subgraphs.
+
+== Summary
+
+Knowledge graphs put relationships first, entities are stable and reusable, and
+reification unlocks statements about statements. The next chapter turns these
+ideas into a concrete data model.
