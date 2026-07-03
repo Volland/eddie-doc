@@ -1,3 +1,4 @@
+import "./polyfill.js"; // must precede the pdfjs import — patches Promise.withResolvers
 import * as path from "node:path";
 import {
   getDocument,

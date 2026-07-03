@@ -28,7 +28,7 @@
     "commands": [
       {
         "command": "eddieDoc.openReview",
-        "title": "Eddie Doc: Open PDF Review for AsciiDoc",
+        "title": "Eddie Doc: Open PDF Review",
         "icon": "$(comment-discussion)"
       },
       {
@@ -115,6 +115,25 @@
           "command": "eddieDoc.openReview",
           "when": "editorLangId == asciidoc || resourceExtname == .adoc || resourceExtname == .asciidoc",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "eddieDoc.openReview",
+          "when": "editorLangId == asciidoc || resourceExtname == .adoc || resourceExtname == .asciidoc",
+          "group": "eddieDoc@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "eddieDoc.openReview",
+          "when": "resourceExtname == .adoc || resourceExtname == .asciidoc || resourceExtname == .pdf",
+          "group": "eddieDoc@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "eddieDoc.openReview"
         }
       ]
     },

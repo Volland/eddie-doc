@@ -8,7 +8,7 @@ import { DiagnosticsManager } from "./ui/diagnostics.js";
 import { EddieCodeActionProvider } from "./ui/codeActions.js";
 import { effectiveLine } from "./matching/mapper.js";
 import type { ReviewItem } from "./model/types.js";
-import { isAdocDoc } from "./util.js";
+import { isAdocDoc, isAdocPath } from "./util.js";
 import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
@@ -92,16 +92,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // ---- Commands -----------------------------------------------------------
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("eddieDoc.openReview", async () => {
-      const adocPath = resolveTargetAdoc(store);
-      if (!adocPath) {
-        vscode.window.showErrorMessage(
-          "Eddie Doc: open the .adoc file you want to review first."
-        );
-        return;
-      }
-      const pdfPath = await pickPdf(adocPath);
-      if (!pdfPath) return;
+    vscode.commands.registerCommand("eddieDoc.openReview", async (arg?: vscode.Uri) => {
+      const pair = await resolveReviewPair(store, arg);
+      if (!pair) return;
+      const { adocPath, pdfPath } = pair;
 
       await vscode.window.withProgress(
         {
@@ -216,6 +210,58 @@ export function deactivate(): void {
 }
 
 // ---- Helpers --------------------------------------------------------------
+
+interface ReviewPair {
+  adocPath: string;
+  pdfPath: string;
+}
+
+/**
+ * Work out which (.adoc, .pdf) pair to review. `arg` is the resource passed by an
+ * Explorer/editor context-menu invocation and may point at either file type;
+ * when absent (command palette / view title) we fall back to the active source.
+ */
+async function resolveReviewPair(
+  store: ReviewStore,
+  arg?: vscode.Uri
+): Promise<ReviewPair | undefined> {
+  const fsPath = arg?.fsPath;
+
+  // Right-clicked a PDF: pair it with a sibling .adoc, else the active one.
+  if (fsPath && /\.pdf$/i.test(fsPath)) {
+    const adocPath = siblingAdoc(fsPath) ?? resolveTargetAdoc(store);
+    if (!adocPath) {
+      vscode.window.showErrorMessage(
+        "Eddie Doc: open the .adoc source this PDF reviews, then try again."
+      );
+      return undefined;
+    }
+    return { adocPath, pdfPath: fsPath };
+  }
+
+  // Right-clicked an .adoc (or no arg): use it, then pick the PDF.
+  const adocPath =
+    fsPath && isAdocPath(fsPath) ? fsPath : resolveTargetAdoc(store);
+  if (!adocPath) {
+    vscode.window.showErrorMessage(
+      "Eddie Doc: open the .adoc file you want to review first."
+    );
+    return undefined;
+  }
+  const pdfPath = await pickPdf(adocPath);
+  if (!pdfPath) return undefined;
+  return { adocPath, pdfPath };
+}
+
+/** Find the .adoc that sits next to a PDF (foo.pdf / foo.annotated.pdf → foo.adoc). */
+function siblingAdoc(pdfPath: string): string | undefined {
+  const base = pdfPath.replace(/(\.annotated)?\.pdf$/i, "");
+  for (const ext of [".adoc", ".asciidoc"]) {
+    const candidate = base + ext;
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
 
 async function pickPdf(adocPath: string): Promise<string | undefined> {
   const sibling = adocPath.replace(/\.adoc$/i, "") + ".pdf";
