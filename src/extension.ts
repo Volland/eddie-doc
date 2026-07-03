@@ -10,6 +10,8 @@ import { effectiveLine } from "./matching/mapper.js";
 import type { ReviewItem } from "./model/types.js";
 import { isAdocDoc, isAdocPath } from "./util.js";
 import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
+import { extractAnnotations } from "./pdf/extract.js";
+import { annotationsToAdoc, extractedAdocPath } from "./pdf/toAdoc.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 
@@ -139,6 +141,13 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand(
+      "eddieDoc.extractAnnotations",
+      async (arg?: vscode.Uri) => {
+        await extractAnnotationsToAdoc(arg);
+      }
+    ),
+
+    vscode.commands.registerCommand(
       "eddieDoc.revealAnnotation",
       async (adocPath: string, id: string) => {
         await revealItem(store, adocPath, id);
@@ -227,15 +236,13 @@ async function resolveReviewPair(
 ): Promise<ReviewPair | undefined> {
   const fsPath = arg?.fsPath;
 
-  // Right-clicked a PDF: pair it with a sibling .adoc, else the active one.
+  // Right-clicked a PDF: let the user choose the .adoc source explicitly
+  // (no filename matching). Default the dialog to the active/sibling .adoc as a
+  // convenience, but the choice is always the user's.
   if (fsPath && /\.pdf$/i.test(fsPath)) {
-    const adocPath = siblingAdoc(fsPath) ?? resolveTargetAdoc(store);
-    if (!adocPath) {
-      vscode.window.showErrorMessage(
-        "Eddie Doc: open the .adoc source this PDF reviews, then try again."
-      );
-      return undefined;
-    }
+    const suggested = resolveTargetAdoc(store) ?? siblingAdoc(fsPath);
+    const adocPath = await pickAdoc(fsPath, suggested);
+    if (!adocPath) return undefined;
     return { adocPath, pdfPath: fsPath };
   }
 
@@ -253,6 +260,58 @@ async function resolveReviewPair(
   return { adocPath, pdfPath };
 }
 
+/**
+ * Side feature: extract a PDF's annotations (with their anchored context) into a
+ * standalone .adoc file — no source mapping, no review session. Opens the result.
+ */
+async function extractAnnotationsToAdoc(arg?: vscode.Uri): Promise<void> {
+  let pdfPath = arg?.fsPath;
+  if (!pdfPath || !/\.pdf$/i.test(pdfPath)) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: "Extract annotations",
+      title: "Select the annotated PDF to extract",
+      filters: { PDF: ["pdf"] },
+    });
+    pdfPath = picked?.[0]?.fsPath;
+  }
+  if (!pdfPath) return;
+  const source = pdfPath;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Eddie Doc: extracting PDF annotations…",
+    },
+    async () => {
+      try {
+        const bytes = new Uint8Array(fs.readFileSync(source));
+        const annots = await extractAnnotations(bytes);
+        const adoc = annotationsToAdoc(source, annots, new Date().toISOString());
+
+        const defaultUri = vscode.Uri.file(extractedAdocPath(source));
+        const target = await vscode.window.showSaveDialog({
+          defaultUri,
+          saveLabel: "Save annotations",
+          filters: { AsciiDoc: ["adoc", "asciidoc"] },
+        });
+        if (!target) return;
+
+        fs.writeFileSync(target.fsPath, adoc, "utf8");
+        const doc = await vscode.workspace.openTextDocument(target);
+        await vscode.window.showTextDocument(doc, { preview: false });
+        vscode.window.showInformationMessage(
+          `Eddie Doc: extracted ${annots.length} annotation(s) to ${path.basename(target.fsPath)}.`
+        );
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `Eddie Doc: failed to extract annotations — ${String(e)}`
+        );
+      }
+    }
+  );
+}
+
 /** Find the .adoc that sits next to a PDF (foo.pdf / foo.annotated.pdf → foo.adoc). */
 function siblingAdoc(pdfPath: string): string | undefined {
   const base = pdfPath.replace(/(\.annotated)?\.pdf$/i, "");
@@ -261,6 +320,29 @@ function siblingAdoc(pdfPath: string): string | undefined {
     if (fs.existsSync(candidate)) return candidate;
   }
   return undefined;
+}
+
+/** Prompt for the .adoc source to map a PDF's annotations onto. */
+async function pickAdoc(
+  pdfPath: string,
+  suggested?: string
+): Promise<string | undefined> {
+  const defaultUri = vscode.Uri.file(suggested ?? path.dirname(pdfPath));
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    openLabel: "Review with this PDF",
+    title: "Select the AsciiDoc source to map annotations onto",
+    defaultUri,
+    filters: { AsciiDoc: ["adoc", "asciidoc", "asc", "ad"] },
+  });
+  const chosen = picked?.[0]?.fsPath;
+  if (chosen && !isAdocPath(chosen)) {
+    vscode.window.showErrorMessage(
+      "Eddie Doc: please pick an AsciiDoc file (.adoc / .asciidoc)."
+    );
+    return undefined;
+  }
+  return chosen;
 }
 
 async function pickPdf(adocPath: string): Promise<string | undefined> {

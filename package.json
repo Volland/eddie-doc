@@ -46,6 +46,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "eddieDoc.extractAnnotations",
+        "title": "Eddie Doc: Extract Annotations as AsciiDoc",
+        "icon": "$(export)"
+      },
+      {
         "command": "eddieDoc.nextAnnotation",
         "title": "Eddie Doc: Next Annotation",
         "icon": "$(arrow-down)"
@@ -138,11 +143,19 @@
           "command": "eddieDoc.openReview",
           "when": "resourceExtname == .adoc || resourceExtname == .asciidoc || resourceExtname == .pdf",
           "group": "eddieDoc@1"
+        },
+        {
+          "command": "eddieDoc.extractAnnotations",
+          "when": "resourceExtname == .pdf",
+          "group": "eddieDoc@2"
         }
       ],
       "commandPalette": [
         {
           "command": "eddieDoc.openReview"
+        },
+        {
+          "command": "eddieDoc.extractAnnotations"
         }
       ]
     },
