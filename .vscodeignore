@@ -8,3 +8,6 @@ out/**
 **/*.map
 .gitignore
 .git/**
+.omc/**
+.mocharc.json
+**/*.vsix

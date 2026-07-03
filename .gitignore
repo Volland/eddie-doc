@@ -4,3 +4,6 @@ out/
 *.vsix
 sample/*.pdf
 sample/*.review.json
+
+.omc/
+eddie-doc-*.vsix
