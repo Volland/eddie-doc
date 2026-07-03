@@ -11,3 +11,6 @@ out/**
 .omc/**
 .mocharc.json
 **/*.vsix
+media/icon-marketplace.svg
+RELEASE_NOTES_*.md
+publish-release.sh
