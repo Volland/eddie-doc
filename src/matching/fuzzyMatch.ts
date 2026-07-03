@@ -1,14 +1,22 @@
 import type { Match } from "../model/types.js";
-import { tokenizeSourceLine } from "./normalize.js";
+import { tokenizeSourceLine, normalizeText } from "./normalize.js";
 
 interface SourceLine {
   index: number; // 0-based line number
   tokens: string[];
 }
 
+/** One source token flattened out of its line, keeping a back-reference. */
+interface FlatToken {
+  t: string;
+  line: number; // 0-based source line this token came from
+}
+
 export interface SourceIndex {
   lines: SourceLine[];
   raw: string[];
+  /** Every prose token in document order, each tagged with its source line. */
+  flat: FlatToken[];
 }
 
 export function buildSourceIndex(source: string): SourceIndex {
@@ -17,105 +25,114 @@ export function buildSourceIndex(source: string): SourceIndex {
     index,
     tokens: tokenizeSourceLine(line),
   }));
-  return { lines, raw };
+  const flat: FlatToken[] = [];
+  for (const l of lines) {
+    for (const t of l.tokens) flat.push({ t, line: l.index });
+  }
+  return { lines, raw, flat };
 }
 
-/** Sørensen–Dice over token bigrams — order-aware, robust to small edits. */
-function bigrams(tokens: string[]): Map<string, number> {
+/** Multiset token counts. */
+function counts(tokens: string[]): Map<string, number> {
   const m = new Map<string, number>();
-  if (tokens.length === 1) {
-    m.set(tokens[0], 1);
-    return m;
-  }
-  for (let i = 0; i + 1 < tokens.length; i++) {
-    const g = tokens[i] + "" + tokens[i + 1];
-    m.set(g, (m.get(g) || 0) + 1);
-  }
+  for (const t of tokens) m.set(t, (m.get(t) || 0) + 1);
   return m;
 }
 
-function diceFromBigrams(
-  a: Map<string, number>,
-  b: Map<string, number>
-): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  let aTotal = 0;
-  let bTotal = 0;
-  for (const v of a.values()) aTotal += v;
-  for (const [k, v] of b) {
-    bTotal += v;
-    const av = a.get(k);
-    if (av) inter += Math.min(av, v);
-  }
-  return (2 * inter) / (aTotal + bTotal);
+/** Tokenize an annotation anchor, tolerating anchors that are pure markup. */
+function queryTokens(anchor: string): string[] {
+  const primary = tokenizeSourceLine(anchor);
+  if (primary.length) return primary;
+  // Anchor was a structural/markup-only line for tokenizeSourceLine's taste
+  // (e.g. it looked like a heading). Fall back to a raw normalize so we still
+  // get its words instead of dropping the annotation entirely.
+  const n = normalizeText(anchor);
+  return n ? n.split(" ") : [];
 }
 
-/** Multiset token overlap — catches short phrases where bigrams are sparse. */
-function jaccardTokens(a: string[], b: string[]): number {
-  if (a.length === 0 || b.length === 0) return 0;
-  const sa = new Set(a);
-  const sb = new Set(b);
-  let inter = 0;
-  for (const t of sa) if (sb.has(t)) inter++;
-  return inter / (sa.size + sb.size - inter);
+export interface MatchOptions {
+  /** Hard cap on how many source lines a single match may span. */
+  maxSpanLines: number;
 }
 
-function similarity(query: string[], window: string[]): number {
-  const dice = diceFromBigrams(bigrams(query), bigrams(window));
-  const jac = jaccardTokens(query, window);
-  // Blend: bigram similarity dominates, token overlap rescues short phrases.
-  return 0.7 * dice + 0.3 * jac;
-}
+const DEFAULTS: MatchOptions = { maxSpanLines: 8 };
 
 /**
- * Find the best contiguous run of source lines whose prose matches `anchor`.
- * Returns null when the anchor has no usable tokens.
+ * Find the best span of source tokens that matches `anchor`.
+ *
+ * Rather than scoring whole-line windows (which can't isolate a sentence that
+ * starts mid-line or wraps across lines), we search contiguous windows of the
+ * flat token stream and keep the one with the highest token-multiset Dice
+ * against the query. Searching the window *size* — not just its start — lets a
+ * short highlight match a tight span while a wrapped paragraph grows to cover
+ * its words, and the multiset (bag-of-words) metric shrugs off the token
+ * boundary noise that PDF extraction introduces.
+ *
+ * Returns null when the anchor has no usable tokens or the source is empty.
  */
 export function matchAnchor(
   anchor: string,
   idx: SourceIndex,
-  maxSpanLines = 6
+  opts: Partial<MatchOptions> = {}
 ): Match | null {
-  const query = tokenizeSourceLine(anchor).length
-    ? tokenizeSourceLine(anchor)
-    : anchor
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}\s]/gu, " ")
-        .split(/\s+/)
-        .filter(Boolean);
-  if (query.length === 0) return null;
+  const { maxSpanLines } = { ...DEFAULTS, ...opts };
+  const query = queryTokens(anchor);
+  const flat = idx.flat;
+  if (query.length === 0 || flat.length === 0) return null;
 
-  // Candidate start lines: those with any prose tokens.
-  let best: Match | null = null;
-  const lines = idx.lines;
+  const need = counts(query);
+  const m = query.length;
+  // Windows never need to be much larger than the query: allow generous slack
+  // for wrapping/interleaved stripped markup, then let Dice punish bloat.
+  const maxWin = Math.min(flat.length, m * 2 + 8);
 
-  for (let s = 0; s < lines.length; s++) {
-    if (lines[s].tokens.length === 0) continue;
-    let windowTokens: string[] = [];
-    for (let e = s; e < Math.min(lines.length, s + maxSpanLines); e++) {
-      if (lines[e].tokens.length === 0 && e !== s) {
-        // allow blank/structural lines inside a span but stop growing on 2+.
-        continue;
-      }
-      windowTokens = windowTokens.concat(lines[e].tokens);
-      // Don't let the window dwarf the query — cap growth once we're well past.
-      if (windowTokens.length > query.length * 3 && e > s) break;
-      const score = similarity(query, windowTokens);
+  let best: { startLine: number; endLine: number; score: number } | null = null;
+
+  for (let i = 0; i < flat.length; i++) {
+    // Only anchor windows at a token the query actually contains — huge pruning
+    // on long documents with no effect on the result.
+    if (!need.has(flat[i].t)) continue;
+
+    const have = new Map<string, number>();
+    let overlap = 0;
+    const end = Math.min(flat.length, i + maxWin);
+    const startLine = flat[i].line;
+
+    for (let e = i; e < end; e++) {
+      const endLine = flat[e].line;
+      if (endLine - startLine >= maxSpanLines) break;
+
+      const x = flat[e].t;
+      const h = (have.get(x) || 0) + 1;
+      have.set(x, h);
+      if (h <= (need.get(x) || 0)) overlap++;
+
+      const winLen = e - i + 1;
+      const score = (2 * overlap) / (m + winLen);
       if (!best || score > best.score) {
-        best = {
-          startLine: s,
-          endLine: e,
-          score,
-          sourceExcerpt: idx.raw
-            .slice(s, e + 1)
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 200),
-        };
+        best = { startLine, endLine, score };
+        if (score === 1) return finalize(best, idx); // can't beat a perfect hit
       }
     }
   }
-  return best;
+
+  if (!best) return null;
+  return finalize(best, idx);
+}
+
+function finalize(
+  best: { startLine: number; endLine: number; score: number },
+  idx: SourceIndex
+): Match {
+  return {
+    startLine: best.startLine,
+    endLine: best.endLine,
+    score: best.score,
+    sourceExcerpt: idx.raw
+      .slice(best.startLine, best.endLine + 1)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200),
+  };
 }

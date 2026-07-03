@@ -18,7 +18,7 @@ const UNMATCHED = Number.MAX_SAFE_INTEGER;
 function threshold(): number {
   return vscode.workspace
     .getConfiguration("eddieDoc")
-    .get<number>("matchThreshold", 0.55);
+    .get<number>("matchThreshold", 0.5);
 }
 
 function activeAdocPath(): string | undefined {

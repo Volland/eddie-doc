@@ -164,7 +164,7 @@
       "properties": {
         "eddieDoc.matchThreshold": {
           "type": "number",
-          "default": 0.55,
+          "default": 0.5,
           "minimum": 0,
           "maximum": 1,
           "description": "Minimum similarity (0-1) for an annotation to be auto-linked to a source line. Below this it is marked 'unmatched'."

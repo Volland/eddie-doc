@@ -46,4 +46,28 @@ describe("matchAnchor", () => {
     // May still return a best-effort span, but it must score poorly.
     assert.ok(!m || m.score < 0.3, `unexpected score ${m?.score}`);
   });
+
+  it("isolates a sentence that starts mid-line", () => {
+    // The highlighted phrase begins partway through the source line and the
+    // line carries extra words before/after it — the token-window scorer should
+    // still land the phrase with a high score rather than being diluted.
+    const src = buildSourceIndex(
+      "Editor note: the quick brown fox jumps over the lazy dog again."
+    );
+    const m = matchAnchor("the quick brown fox jumps over the lazy dog", src);
+    assert.ok(m, "expected a match");
+    assert.strictEqual(m!.startLine, 0);
+    assert.ok(m!.score > 0.75, `score ${m!.score}`);
+  });
+
+  it("matches a phrase that wraps across two source lines", () => {
+    const m = matchAnchor(
+      "wish to describe a concept or an event",
+      idx
+    );
+    assert.ok(m, "expected a match");
+    assert.strictEqual(m!.startLine, 4);
+    assert.strictEqual(m!.endLine, 5);
+    assert.ok(m!.score > 0.7, `score ${m!.score}`);
+  });
 });

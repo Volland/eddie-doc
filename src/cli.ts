@@ -18,7 +18,7 @@ async function main() {
   const source = readFileSync(adocPath, "utf8");
 
   const annots = await extractAnnotations(data);
-  const items = mapAnnotations(annots, source, { threshold: 0.55 });
+  const items = mapAnnotations(annots, source, { threshold: 0.5 });
 
   if (asJson) {
     console.log(JSON.stringify(items, null, 2));
