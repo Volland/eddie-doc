@@ -14,3 +14,5 @@ out/**
 media/icon-marketplace.svg
 RELEASE_NOTES_*.md
 release.sh
+build.sh
+install.sh
