@@ -52,29 +52,37 @@ export class AnnotationTreeProvider
   getChildren(node?: Node): Node[] {
     const session = this.activeSession();
     if (!session) return [];
-    const showResolved = vscode.workspace
-      .getConfiguration("eddieDoc")
-      .get<boolean>("showResolved", true);
 
     if (!node) {
-      const items = session.items.filter(
-        (i) => showResolved || !i.resolved
-      );
-      const open = items.filter(
+      const cfg = vscode.workspace.getConfiguration("eddieDoc");
+      const showResolved = cfg.get<boolean>("showResolved", true);
+      const highConf = cfg.get<number>("highConfidence", 0.75);
+
+      const items = session.items.filter((i) => showResolved || !i.resolved);
+      const matched = items.filter(
         (i) => !i.resolved && effectiveLine(i) !== UNMATCHED
       );
+      const open = matched.filter((i) => isConfident(i, highConf));
+      const review = matched.filter((i) => !isConfident(i, highConf));
       const unmatched = items.filter(
         (i) => !i.resolved && effectiveLine(i) === UNMATCHED
       );
       const done = items.filter((i) => i.resolved);
 
       const groups: GroupNode[] = [];
-      if (open.length)
-        groups.push({ type: "group", label: `Open (${open.length})`, children: toItems(open, session.adocPath) });
-      if (unmatched.length)
-        groups.push({ type: "group", label: `Unmatched (${unmatched.length})`, children: toItems(unmatched, session.adocPath) });
-      if (done.length)
-        groups.push({ type: "group", label: `Resolved (${done.length})`, children: toItems(done, session.adocPath) });
+      const add = (label: string, arr: ItemNode[]) => {
+        if (arr.length) groups.push({ type: "group", label, children: arr });
+      };
+      add(`Open (${open.length})`, toItems(open, session.adocPath));
+      add(
+        `Needs review (${review.length})`,
+        toItems(review, session.adocPath)
+      );
+      add(
+        `Unmatched (${unmatched.length})`,
+        toItems(unmatched, session.adocPath)
+      );
+      add(`Resolved (${done.length})`, toItems(done, session.adocPath));
       return groups;
     }
 
@@ -94,16 +102,25 @@ export class AnnotationTreeProvider
 
     const { item } = node;
     const line = effectiveLine(item);
+    const highConf = vscode.workspace
+      .getConfiguration("eddieDoc")
+      .get<number>("highConfidence", 0.75);
     const label = `${KIND_LABEL[item.kind]}: ${snippet(item)}`;
     const ti = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     ti.id = item.id;
-    ti.contextValue = "annotation";
+    // Needs-review items get a distinct contextValue so the "confirm" action
+    // only appears where it makes sense.
+    const needsReview =
+      !item.resolved &&
+      line !== UNMATCHED &&
+      !isConfident(item, highConf);
+    ti.contextValue = needsReview ? "annotation.review" : "annotation";
     ti.iconPath = new vscode.ThemeIcon(
       item.resolved ? "check" : KIND_ICON[item.kind]
     );
-    const where =
-      line === UNMATCHED ? "no source match" : `line ${line + 1}`;
-    ti.description = `${where}${item.author ? ` · ${item.author}` : ""}`;
+    ti.description = `${locationLabel(item, line)}${
+      item.author ? ` · ${item.author}` : ""
+    }`;
     ti.tooltip = tooltip(item);
     if (line !== UNMATCHED) {
       ti.command = {
@@ -118,6 +135,26 @@ export class AnnotationTreeProvider
 
 function toItems(items: ReviewItem[], adocPath: string): ItemNode[] {
   return items.map((item) => ({ type: "item", item, adocPath }));
+}
+
+/** A link we trust: hand-picked, confirmed, or a high-confidence auto-match. */
+function isConfident(item: ReviewItem, highConf: number): boolean {
+  if (item.manualLine != null || item.confirmed) return true;
+  return (item.match?.score ?? 0) >= highConf;
+}
+
+/** "line 12 · 0.83" / "line 12 · manual" / "line 12 · semantic 0.71". */
+function locationLabel(item: ReviewItem, line: number): string {
+  if (line === UNMATCHED) return "no source match";
+  const parts = [`line ${line + 1}`];
+  if (item.manualLine != null) parts.push("manual");
+  else if (item.match) {
+    const m = item.match;
+    parts.push(
+      `${m.method === "semantic" ? "semantic " : ""}${m.score.toFixed(2)}`
+    );
+  }
+  return parts.join(" · ");
 }
 
 function snippet(item: ReviewItem): string {

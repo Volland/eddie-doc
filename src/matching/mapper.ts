@@ -1,9 +1,25 @@
-import type { RawAnnotation, ReviewItem } from "../model/types.js";
+import type { Match, RawAnnotation, ReviewItem } from "../model/types.js";
 import { buildSourceIndex, matchAnchor, type SourceIndex } from "./fuzzyMatch.js";
 
 export interface MapOptions {
   /** Below this score, the match is discarded and the item is 'unmatched'. */
   threshold: number;
+}
+
+/**
+ * Match a single annotation against a prepared source index, returning the match
+ * only when it clears `threshold`. Shared by the bulk mapper and the per-item
+ * "re-map" action so both derive locations the same way.
+ */
+export function matchOne(
+  a: RawAnnotation,
+  idx: SourceIndex,
+  threshold: number
+): Match | null {
+  // Prefer the anchored text; fall back to the comment for sticky notes.
+  const anchorSource = a.anchoredText || a.comment;
+  const raw = matchAnchor(anchorSource, idx);
+  return raw && raw.score >= threshold ? raw : null;
 }
 
 /** Map extracted annotations onto source lines, preserving prior state. */
@@ -18,10 +34,7 @@ export function mapAnnotations(
 
   const items = annotations.map((a): ReviewItem => {
     const prior = prevById.get(a.id);
-    // Prefer the anchored text; fall back to the comment for sticky notes.
-    const anchorSource = a.anchoredText || a.comment;
-    const raw = matchAnchor(anchorSource, idx);
-    const match = raw && raw.score >= opts.threshold ? raw : null;
+    const match = matchOne(a, idx, opts.threshold);
 
     return {
       ...a,

@@ -8,6 +8,8 @@ import { DiagnosticsManager } from "./ui/diagnostics.js";
 import { EddieCodeActionProvider } from "./ui/codeActions.js";
 import { effectiveLine } from "./matching/mapper.js";
 import type { ReviewItem } from "./model/types.js";
+import { KIND_LABEL } from "./model/types.js";
+import { countNewlines, type ContentChange } from "./matching/posTrack.js";
 import { isAdocDoc, isAdocPath } from "./util.js";
 import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
 import { extractAnnotations } from "./pdf/extract.js";
@@ -66,6 +68,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (isAdocDoc(doc)) store.tryLoadSidecar(doc.uri.fsPath);
   }
 
+  let treeRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   const refreshUI = () => {
     tree.refresh();
     decorations.update(vscode.window.activeTextEditor);
@@ -88,6 +91,27 @@ export function activate(context: vscode.ExtensionContext): void {
       if (isAdocDoc(doc) && store.get(doc.uri.fsPath)) {
         await store.remap(doc.uri.fsPath, threshold());
       }
+    }),
+    // Live position tracking: shift annotation anchors with the text as the user
+    // types so every command stays addressable *between* saves (the save-time
+    // remap then reconciles by content). Decorations/diagnostics update at once;
+    // the tree label refresh is debounced to avoid churn while typing.
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (!isAdocDoc(e.document) || e.contentChanges.length === 0) return;
+      if (!store.get(e.document.uri.fsPath)) return;
+      const changes: ContentChange[] = e.contentChanges.map((c) => ({
+        startLine: c.range.start.line,
+        endLine: c.range.end.line,
+        newLineCount: countNewlines(c.text),
+      }));
+      if (!store.shiftPositions(e.document.uri.fsPath, changes)) return;
+      const ed = vscode.window.visibleTextEditors.find(
+        (v) => v.document === e.document
+      );
+      decorations.update(ed);
+      diagnostics.update(e.document);
+      if (treeRefreshTimer) clearTimeout(treeRefreshTimer);
+      treeRefreshTimer = setTimeout(() => tree.refresh(), 300);
     })
   );
 
@@ -177,6 +201,54 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.showInformationMessage(
         `Eddie Doc: re-linked to line ${ed.selection.active.line + 1}.`
       );
+    }),
+
+    // Reselect the source line via a searchable line picker — works from the
+    // tree for any item (including unmatched ones) without touching the cursor.
+    vscode.commands.registerCommand(
+      "eddieDoc.relinkPick",
+      async (arg?: unknown) => {
+        const ref = resolveItemRef(store, arg);
+        if (!ref) return;
+        await relinkViaPick(store, ref);
+      }
+    ),
+
+    // Re-run automatic matching for a single annotation, discarding any manual
+    // link, and reveal the result.
+    vscode.commands.registerCommand(
+      "eddieDoc.remapItem",
+      async (arg?: unknown) => {
+        const ref = resolveItemRef(store, arg);
+        if (!ref) return;
+        store.remapItem(ref.adocPath, ref.id, threshold());
+        const item = store.findItem(ref.adocPath, ref.id);
+        if (item && effectiveLine(item) !== UNMATCHED) {
+          await revealItem(store, ref.adocPath, ref.id);
+        } else {
+          vscode.window.showInformationMessage(
+            "Eddie Doc: no confident source match — use Reselect to link it by hand."
+          );
+        }
+      }
+    ),
+
+    // Vouch for a low-confidence / semantic match so it moves out of "Needs
+    // review" into the Open group.
+    vscode.commands.registerCommand(
+      "eddieDoc.confirmMatch",
+      async (arg?: unknown) => {
+        const ref = resolveItemRef(store, arg);
+        if (!ref) return;
+        store.confirmMatch(ref.adocPath, ref.id);
+      }
+    ),
+
+    // Batch-apply every actionable, confidently-matched edit (deletes for
+    // strikeouts, replaces/inserts with a parseable suggestion) as one undoable
+    // step, after a preview.
+    vscode.commands.registerCommand("eddieDoc.applyAllEdits", async () => {
+      await applyAllEdits(store);
     }),
 
     vscode.commands.registerCommand(
@@ -384,6 +456,73 @@ async function revealItem(
   editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
 }
 
+interface LinePick extends vscode.QuickPickItem {
+  line: number;
+}
+
+/**
+ * Reselect an annotation's source line with a searchable quick pick. The picker
+ * lists every non-blank source line, pre-selects the current match, and seeds
+ * the filter with a few words from the annotation so the likely lines surface
+ * first. Unlike cursor-based re-link, this works entirely from the tree view.
+ */
+async function relinkViaPick(store: ReviewStore, ref: ItemRef): Promise<void> {
+  const item = store.findItem(ref.adocPath, ref.id);
+  if (!item) return;
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(ref.adocPath)
+  );
+
+  const picks: LinePick[] = [];
+  for (let n = 0; n < doc.lineCount; n++) {
+    const text = doc.lineAt(n).text.trim();
+    if (!text) continue;
+    picks.push({
+      label: `Line ${n + 1}`,
+      description: text.length > 100 ? text.slice(0, 100) + "…" : text,
+      line: n,
+    });
+  }
+  if (picks.length === 0) return;
+
+  const current = effectiveLine(item);
+  const anchor = (item.anchoredText || item.comment || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const chosen = await new Promise<LinePick | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<LinePick>();
+    qp.title = `Reselect source line — ${KIND_LABEL[item.kind]}`;
+    qp.placeholder = anchor
+      ? `Link “${anchor.slice(0, 60)}” to a source line`
+      : "Choose the source line to link this annotation to";
+    qp.matchOnDescription = true;
+    qp.items = picks;
+    // Seed the filter with distinctive words so relevant lines float up.
+    qp.value = anchor.split(" ").slice(0, 4).join(" ");
+    if (current !== UNMATCHED) {
+      const active = picks.find((p) => p.line === current);
+      if (active) qp.activeItems = [active];
+    }
+    qp.onDidAccept(() => {
+      resolve(qp.selectedItems[0]);
+      qp.hide();
+    });
+    qp.onDidHide(() => {
+      resolve(undefined);
+      qp.dispose();
+    });
+    qp.show();
+  });
+  if (!chosen) return;
+
+  store.relink(ref.adocPath, ref.id, chosen.line);
+  await revealItem(store, ref.adocPath, ref.id);
+  vscode.window.showInformationMessage(
+    `Eddie Doc: linked to line ${chosen.line + 1}.`
+  );
+}
+
 /** Best-guess replacement text from a free-form editor comment. */
 function parseSuggestion(comment: string): string {
   const c = comment.replace(/\s+/g, " ").trim();
@@ -424,11 +563,34 @@ async function applyReplace(
     valueSelection: [0, value.length],
   });
   if (replacement == null) return;
+  if (!(await confirmDiff("Apply this replacement?", current, replacement)))
+    return;
   const edit = new vscode.WorkspaceEdit();
   edit.replace(doc.uri, range, replacement);
   await vscode.workspace.applyEdit(edit);
   store.toggleResolved(adocPath, id);
   await revealItem(store, adocPath, id);
+}
+
+/**
+ * Modal before/after confirmation. Returns true when the user approves (or the
+ * change is a no-op). Keeps destructive/text edits an explicit, reviewed step.
+ */
+async function confirmDiff(
+  prompt: string,
+  before: string,
+  after: string
+): Promise<boolean> {
+  if (before === after) return true;
+  const detail = `- ${before.replace(/\s+/g, " ").trim()}\n+ ${after
+    .replace(/\s+/g, " ")
+    .trim()}`;
+  const pick = await vscode.window.showInformationMessage(
+    prompt,
+    { modal: true, detail },
+    "Apply"
+  );
+  return pick === "Apply";
 }
 
 async function applyInsert(
@@ -456,6 +618,7 @@ async function applyInsert(
     valueSelection: [0, value.length],
   });
   if (text == null || text === "") return;
+  if (!(await confirmDiff("Insert this text?", "", text))) return;
   // Add surrounding spaces only where the neighbours aren't already spaced.
   const before = pos.character > 0 ? doc.getText(
     new vscode.Range(pos.translate(0, -1), pos)
@@ -466,6 +629,119 @@ async function applyInsert(
   await vscode.workspace.applyEdit(edit);
   store.toggleResolved(adocPath, id);
   await revealItem(store, adocPath, id);
+}
+
+/** Score at/above which an auto-match is treated as high-confidence. */
+function highConfidence(): number {
+  return vscode.workspace
+    .getConfiguration("eddieDoc")
+    .get<number>("highConfidence", 0.75);
+}
+
+/** A link we trust enough to act on without a manual look. */
+function isConfident(item: ReviewItem, highConf: number): boolean {
+  if (item.manualLine != null || item.confirmed) return true;
+  return (item.match?.score ?? 0) >= highConf;
+}
+
+function clip(s: string, n: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n) + "…" : t;
+}
+
+interface PlannedEdit {
+  id: string;
+  label: string;
+  apply: (edit: vscode.WorkspaceEdit, uri: vscode.Uri) => void;
+}
+
+/**
+ * Collect every actionable, confidently-matched edit and apply them as a single
+ * undoable WorkspaceEdit after a preview. Deletes struck text, applies
+ * replacements/insertions whose reviewer comment yields a suggestion. Skips
+ * highlights/comments with nothing to change and anything low-confidence.
+ */
+async function applyAllEdits(store: ReviewStore): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const session = adocPath ? store.get(adocPath) : undefined;
+  if (!adocPath || !session) {
+    vscode.window.showInformationMessage("Eddie Doc: no review loaded.");
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(adocPath)
+  );
+  const highConf = highConfidence();
+
+  const planned: PlannedEdit[] = [];
+  for (const item of session.items) {
+    if (item.resolved) continue;
+    const line = effectiveLine(item);
+    if (line === UNMATCHED || line >= doc.lineCount) continue;
+    if (!isConfident(item, highConf)) continue;
+
+    if (item.kind === "strikeout") {
+      const range = resolveMarkedRange(doc, item);
+      if (!range) continue;
+      const before = doc.getText(range);
+      planned.push({
+        id: item.id,
+        label: `Delete “${clip(before, 50)}”`,
+        apply: (edit, uri) => edit.delete(uri, range),
+      });
+    } else if (
+      item.kind === "replace" ||
+      ((item.kind === "highlight" || item.kind === "underline") && item.comment)
+    ) {
+      const range = resolveMarkedRange(doc, item);
+      const value = parseSuggestion(item.comment);
+      if (!range || !value) continue;
+      const before = doc.getText(range);
+      planned.push({
+        id: item.id,
+        label: `Replace “${clip(before, 32)}” → “${clip(value, 32)}”`,
+        apply: (edit, uri) => edit.replace(uri, range, value),
+      });
+    } else if (item.kind === "insert") {
+      const pos = resolveInsertPosition(doc, item);
+      const value = parseSuggestion(item.comment);
+      if (!pos || !value) continue;
+      planned.push({
+        id: item.id,
+        label: `Insert “${clip(value, 50)}”`,
+        apply: (edit, uri) => edit.insert(uri, pos, ` ${value}`),
+      });
+    }
+  }
+
+  if (planned.length === 0) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: no actionable, confident edits to apply."
+    );
+    return;
+  }
+
+  const detail = planned.map((p, i) => `${i + 1}. ${p.label}`).join("\n");
+  const pick = await vscode.window.showInformationMessage(
+    `Apply ${planned.length} edit(s) to ${path.basename(adocPath)}?`,
+    { modal: true, detail },
+    "Apply all"
+  );
+  if (pick !== "Apply all") return;
+
+  const edit = new vscode.WorkspaceEdit();
+  for (const p of planned) p.apply(edit, doc.uri);
+  const ok = await vscode.workspace.applyEdit(edit);
+  if (!ok) {
+    vscode.window.showErrorMessage(
+      "Eddie Doc: some edits overlapped and weren't applied — apply them individually."
+    );
+    return;
+  }
+  for (const p of planned) store.toggleResolved(adocPath, p.id);
+  vscode.window.showInformationMessage(
+    `Eddie Doc: applied ${planned.length} edit(s).`
+  );
 }
 
 interface ItemRef {

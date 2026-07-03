@@ -73,6 +73,26 @@
         "command": "eddieDoc.relink",
         "title": "Eddie Doc: Re-link to Current Cursor Line",
         "icon": "$(link)"
+      },
+      {
+        "command": "eddieDoc.relinkPick",
+        "title": "Eddie Doc: Reselect Source Line",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "eddieDoc.remapItem",
+        "title": "Eddie Doc: Re-map This Annotation",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "eddieDoc.confirmMatch",
+        "title": "Eddie Doc: Confirm Match",
+        "icon": "$(thumbsup)"
+      },
+      {
+        "command": "eddieDoc.applyAllEdits",
+        "title": "Eddie Doc: Apply All Confident Edits",
+        "icon": "$(check-all)"
       }
     ],
     "viewsContainers": {
@@ -110,18 +130,53 @@
           "command": "eddieDoc.refresh",
           "when": "view == eddieDoc.annotations",
           "group": "navigation@2"
+        },
+        {
+          "command": "eddieDoc.applyAllEdits",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
+          "command": "eddieDoc.confirmMatch",
+          "when": "view == eddieDoc.annotations && viewItem == annotation.review",
+          "group": "inline@0"
+        },
+        {
           "command": "eddieDoc.toggleResolved",
-          "when": "view == eddieDoc.annotations && viewItem == annotation",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
           "group": "inline@1"
         },
         {
-          "command": "eddieDoc.relink",
-          "when": "view == eddieDoc.annotations && viewItem == annotation",
+          "command": "eddieDoc.relinkPick",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
           "group": "inline@2"
+        },
+        {
+          "command": "eddieDoc.remapItem",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
+          "group": "inline@3"
+        },
+        {
+          "command": "eddieDoc.confirmMatch",
+          "when": "view == eddieDoc.annotations && viewItem == annotation.review",
+          "group": "1_link@0"
+        },
+        {
+          "command": "eddieDoc.relinkPick",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
+          "group": "1_link@1"
+        },
+        {
+          "command": "eddieDoc.relink",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
+          "group": "1_link@2"
+        },
+        {
+          "command": "eddieDoc.remapItem",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
+          "group": "1_link@3"
         }
       ],
       "editor/title": [
@@ -156,6 +211,18 @@
         },
         {
           "command": "eddieDoc.extractAnnotations"
+        },
+        {
+          "command": "eddieDoc.relinkPick",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.remapItem",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.confirmMatch",
+          "when": "false"
         }
       ]
     },
@@ -173,6 +240,35 @@
           "type": "boolean",
           "default": true,
           "description": "Show resolved annotations in the tree and as decorations."
+        },
+        "eddieDoc.highConfidence": {
+          "type": "number",
+          "default": 0.75,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Match score (0-1) at/above which an auto-linked annotation is treated as high-confidence. Below this it lands in the 'Needs review' group and is skipped by 'Apply All Confident Edits'."
+        },
+        "eddieDoc.semanticFallback": {
+          "type": "boolean",
+          "default": false,
+          "description": "For annotations the token matcher can't place, fall back to semantic similarity using a local embedding model served by Ollama. Off by default; requires Ollama running."
+        },
+        "eddieDoc.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL of the local Ollama server used for the semantic fallback."
+        },
+        "eddieDoc.embedModel": {
+          "type": "string",
+          "default": "embeddinggemma",
+          "description": "Ollama embedding model for the semantic fallback (e.g. embeddinggemma, nomic-embed-text). Pull it first with `ollama pull <model>`."
+        },
+        "eddieDoc.semanticThreshold": {
+          "type": "number",
+          "default": 0.62,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum cosine similarity (0-1) for the semantic fallback to link an annotation to a source paragraph."
         }
       }
     }

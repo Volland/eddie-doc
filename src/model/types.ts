@@ -48,6 +48,8 @@ export interface Match {
   score: number;
   /** The source text span that matched (for display / debugging). */
   sourceExcerpt: string;
+  /** How the match was produced: token fuzzy match or semantic embedding. */
+  method?: "fuzzy" | "semantic";
 }
 
 /** A fully-resolved review item: annotation + where it lives in source + state. */
@@ -56,6 +58,11 @@ export interface ReviewItem extends RawAnnotation {
   resolved: boolean;
   /** Set when the user manually re-links; overrides the fuzzy match. */
   manualLine?: number;
+  /**
+   * User has vouched for this link (manual re-select, or accepted a low-
+   * confidence/semantic auto-match). Keeps it out of the "Needs review" group.
+   */
+  confirmed?: boolean;
   note?: string;
 }
 
