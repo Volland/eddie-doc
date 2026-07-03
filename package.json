@@ -2,7 +2,7 @@
   "name": "eddie-doc",
   "displayName": "Eddie Doc — AsciiDoc PDF Review",
   "description": "Map annotations from an editor's PDF back onto your AsciiDoc source: highlights, strikethroughs, comments and inserted text become navigable, resolvable review items in the editor.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "pavlyshyn",
   "license": "MIT",
   "icon": "media/icon.png",
