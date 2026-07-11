@@ -5,16 +5,23 @@ const path = require("node:path");
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 
-// pdfjs needs its worker file available next to the bundle; copy the prebuilt
-// legacy ESM worker into dist/ and point GlobalWorkerOptions.workerSrc at it.
-function copyWorker() {
-  const src = path.join(
-    __dirname,
-    "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
-  );
+// pdfjs assets that must sit next to the bundle:
+//  - pdf.worker.mjs: the Node worker used by the extraction code path.
+//  - pdf.min.mjs / pdf.worker.min.mjs: loaded by the PDF-preview webview, which
+//    renders pages in a browser context (no native canvas needed).
+function copyPdfAssets() {
+  const base = path.join(__dirname, "node_modules/pdfjs-dist");
+  const files = [
+    ["legacy/build/pdf.worker.mjs", "pdf.worker.mjs"],
+    ["build/pdf.min.mjs", "pdf.min.mjs"],
+    ["build/pdf.worker.min.mjs", "pdf.worker.min.mjs"],
+  ];
   fs.mkdirSync(path.join(__dirname, "dist"), { recursive: true });
-  if (fs.existsSync(src)) {
-    fs.copyFileSync(src, path.join(__dirname, "dist/pdf.worker.mjs"));
+  for (const [from, to] of files) {
+    const src = path.join(base, from);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(__dirname, "dist", to));
+    }
   }
 }
 
@@ -33,7 +40,7 @@ const common = {
 };
 
 async function main() {
-  copyWorker();
+  copyPdfAssets();
   const entries = [
     { entry: "src/extension.ts", outfile: "dist/extension.js", external: ["vscode"] },
     { entry: "src/cli.ts", outfile: "dist/cli.js", external: [] },

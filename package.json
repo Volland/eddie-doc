@@ -93,6 +93,11 @@
         "command": "eddieDoc.applyAllEdits",
         "title": "Eddie Doc: Apply All Confident Edits",
         "icon": "$(check-all)"
+      },
+      {
+        "command": "eddieDoc.previewAnnotation",
+        "title": "Eddie Doc: Preview in PDF",
+        "icon": "$(file-media)"
       }
     ],
     "viewsContainers": {
@@ -144,19 +149,29 @@
           "group": "inline@0"
         },
         {
-          "command": "eddieDoc.toggleResolved",
+          "command": "eddieDoc.previewAnnotation",
           "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
           "group": "inline@1"
         },
         {
-          "command": "eddieDoc.relinkPick",
+          "command": "eddieDoc.toggleResolved",
           "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
           "group": "inline@2"
         },
         {
-          "command": "eddieDoc.remapItem",
+          "command": "eddieDoc.relinkPick",
           "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
           "group": "inline@3"
+        },
+        {
+          "command": "eddieDoc.remapItem",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
+          "group": "inline@4"
+        },
+        {
+          "command": "eddieDoc.previewAnnotation",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^annotation/",
+          "group": "0_view@1"
         },
         {
           "command": "eddieDoc.confirmMatch",
@@ -222,6 +237,10 @@
         },
         {
           "command": "eddieDoc.confirmMatch",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.previewAnnotation",
           "when": "false"
         }
       ]

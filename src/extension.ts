@@ -14,6 +14,7 @@ import { isAdocDoc, isAdocPath } from "./util.js";
 import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
 import { extractAnnotations } from "./pdf/extract.js";
 import { annotationsToAdoc, extractedAdocPath } from "./pdf/toAdoc.js";
+import { PdfPreviewPanel } from "./ui/pdfPreview.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 
@@ -46,9 +47,20 @@ export function activate(context: vscode.ExtensionContext): void {
   const tree = new AnnotationTreeProvider(store, activeAdocPath);
   const decorations = new DecorationManager(store);
   const diagnostics = new DiagnosticsManager(store);
+  const preview = new PdfPreviewPanel(context.extensionUri);
 
   const treeView = vscode.window.createTreeView("eddieDoc.annotations", {
     treeDataProvider: tree,
+  });
+
+  // Once the preview panel is open, follow the tree selection so browsing the
+  // annotation list re-renders the matching PDF region live.
+  treeView.onDidChangeSelection((e) => {
+    if (!preview.isOpen) return;
+    const node = e.selection[0];
+    if (node && node.type === "item") {
+      previewItem(store, preview, node.adocPath, node.item.id);
+    }
   });
 
   context.subscriptions.push(
@@ -251,6 +263,16 @@ export function activate(context: vscode.ExtensionContext): void {
       await applyAllEdits(store);
     }),
 
+    // Open (or update) the PDF preview showing this annotation's page + mark.
+    vscode.commands.registerCommand(
+      "eddieDoc.previewAnnotation",
+      async (arg?: unknown) => {
+        const ref = resolveItemRef(store, arg);
+        if (!ref) return;
+        previewItem(store, preview, ref.adocPath, ref.id);
+      }
+    ),
+
     vscode.commands.registerCommand(
       "eddieDoc.replaceMarked",
       async (adocPath: string, id: string) => {
@@ -280,6 +302,7 @@ export function activate(context: vscode.ExtensionContext): void {
     treeView,
     decorations,
     diagnostics,
+    { dispose: () => preview.dispose() },
     { dispose: () => store.dispose() }
   );
 
@@ -520,6 +543,24 @@ async function relinkViaPick(store: ReviewStore, ref: ItemRef): Promise<void> {
   await revealItem(store, ref.adocPath, ref.id);
   vscode.window.showInformationMessage(
     `Eddie Doc: linked to line ${chosen.line + 1}.`
+  );
+}
+
+/** Open/refresh the PDF preview for an annotation (matched or not). */
+function previewItem(
+  store: ReviewStore,
+  preview: PdfPreviewPanel,
+  adocPath: string,
+  id: string
+): void {
+  const session = store.get(adocPath);
+  const item = store.findItem(adocPath, id);
+  if (!session || !item) return;
+  preview.show(
+    session.pdfPath,
+    item.page,
+    item.rect,
+    `${KIND_LABEL[item.kind]} · p${item.page}`
   );
 }
 
