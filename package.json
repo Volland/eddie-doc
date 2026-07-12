@@ -53,6 +53,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "eddieDoc.switchReview",
+        "title": "Eddie Doc: Switch Review",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "eddieDoc.extractAnnotations",
         "title": "Eddie Doc: Extract Annotations as AsciiDoc",
         "icon": "$(export)"
@@ -138,6 +143,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "eddieDoc.switchReview",
+          "when": "view == eddieDoc.annotations && eddieDoc.hasMultipleReviews",
+          "group": "navigation@0"
+        },
         {
           "command": "eddieDoc.openReview",
           "when": "view == eddieDoc.annotations",
@@ -248,6 +258,9 @@
         },
         {
           "command": "eddieDoc.extractAnnotations"
+        },
+        {
+          "command": "eddieDoc.switchReview"
         },
         {
           "command": "eddieDoc.relinkPick",

@@ -40,12 +40,12 @@ export class AnnotationTreeProvider
   }
 
   private activeSession(): ReviewSession | undefined {
+    // A focused .adoc strictly governs which pair the tree shows: its own
+    // session, or nothing (so navigating to an unreviewed .adoc doesn't leak a
+    // different pair's annotations). Only with no .adoc in focus at all — e.g. a
+    // freshly opened window — do we fall back to the most recent review.
     const active = this.getActiveAdoc();
-    if (active) {
-      const s = this.store.get(active);
-      if (s) return s;
-    }
-    // Fall back to the most recently updated session.
+    if (active) return this.store.get(active);
     return this.store
       .all()
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];

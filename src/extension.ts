@@ -49,14 +49,33 @@ function resolveTargetAdoc(store: ReviewStore): string | undefined {
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new ReviewStore();
-  const tree = new AnnotationTreeProvider(store, activeAdocPath);
   const decorations = new DecorationManager(store);
   const diagnostics = new DiagnosticsManager(store);
   const preview = new PdfPreviewPanel(context.extensionUri);
 
+  // The last .adoc the user focused. When they navigate to a non-.adoc editor
+  // (the tree, a PDF, settings…) we keep showing this pair rather than jumping
+  // to whichever review was most recently edited.
+  let lastAdoc: string | undefined = activeAdocPath();
+  // Which pair the PDF preview is currently following, so we only re-point it
+  // when the active pair actually changes (not on every store mutation).
+  let previewedAdoc: string | undefined;
+
+  // The pair the whole UI is bound to: the live active editor if it's an .adoc,
+  // otherwise the last one we saw.
+  const resolvedAdoc = (): string | undefined => activeAdocPath() ?? lastAdoc;
+
+  const tree = new AnnotationTreeProvider(store, resolvedAdoc);
+
   const treeView = vscode.window.createTreeView("eddieDoc.annotations", {
     treeDataProvider: tree,
   });
+
+  /** Show `id`'s PDF region and remember which pair the preview now follows. */
+  const showPreview = (adocPath: string, id: string): void => {
+    previewItem(store, preview, adocPath, id);
+    previewedAdoc = adocPath;
+  };
 
   // Once the preview panel is open, follow the tree selection so browsing the
   // annotation list re-renders the matching PDF region live.
@@ -64,7 +83,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!preview.isOpen) return;
     const node = e.selection[0];
     if (node && node.type === "item") {
-      previewItem(store, preview, node.adocPath, node.item.id);
+      showPreview(node.adocPath, node.item.id);
     }
   });
 
@@ -80,23 +99,52 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
-  // Load any persisted sidecars for already-open .adoc documents.
+  // Load persisted sidecars for already-open .adoc documents up front, then scan
+  // the rest of the workspace so every (.adoc, .pdf) pair is known and switchable
+  // before the user has opened each source file.
   for (const doc of vscode.workspace.textDocuments) {
     if (isAdocDoc(doc)) store.tryLoadSidecar(doc.uri.fsPath);
   }
+  void loadWorkspaceSidecars(store).then(refreshUI);
+
+  /**
+   * Keep the tree header and PDF preview bound to the active pair: show its name
+   * next to the view title, expose whether >1 review exists (for the Switch
+   * button), and — when the preview is open — re-point it at the newly active
+   * pair as the user moves between .adoc files.
+   */
+  function syncActivePair(): void {
+    const adoc = resolvedAdoc();
+    const session = adoc ? store.get(adoc) : undefined;
+    treeView.description = session
+      ? path.basename(session.adocPath)
+      : undefined;
+    void vscode.commands.executeCommand(
+      "setContext",
+      "eddieDoc.hasMultipleReviews",
+      store.all().length > 1
+    );
+    if (session && adoc && preview.isOpen && adoc !== previewedAdoc) {
+      const first = session.items[0];
+      if (first) showPreview(adoc, first.id);
+    }
+  }
 
   let treeRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-  const refreshUI = () => {
+  function refreshUI() {
     tree.refresh();
     decorations.update(vscode.window.activeTextEditor);
     diagnostics.update(vscode.window.activeTextEditor?.document);
-  };
+    syncActivePair();
+  }
   context.subscriptions.push(store.onDidChange(refreshUI));
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((ed) => {
-      if (ed && isAdocDoc(ed.document))
-        store.tryLoadSidecar(ed.document.uri.fsPath);
+      if (ed && isAdocDoc(ed.document)) {
+        lastAdoc = ed.document.uri.fsPath;
+        store.tryLoadSidecar(lastAdoc);
+      }
       refreshUI();
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -168,6 +216,13 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         }
       );
+    }),
+
+    // Jump the whole UI (tree, editor, and — if open — the PDF preview) to
+    // another (.adoc, .pdf) pair in the project. Opening the .adoc drives the
+    // active-editor sync so everything follows.
+    vscode.commands.registerCommand("eddieDoc.switchReview", async () => {
+      await switchReview(store);
     }),
 
     vscode.commands.registerCommand("eddieDoc.refresh", async () => {
@@ -271,7 +326,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // Walk every unmatched annotation in one pass, each with a ranked shortlist
     // of candidate source lines to link (or skip) without cursor-hunting.
     vscode.commands.registerCommand("eddieDoc.triageUnmatched", async () => {
-      await triageUnmatched(store, preview);
+      await triageUnmatched(store, showPreview);
     }),
 
     // Open (or update) the PDF preview showing this annotation's page + mark.
@@ -280,7 +335,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (arg?: unknown) => {
         const ref = resolveItemRef(store, arg);
         if (!ref) return;
-        previewItem(store, preview, ref.adocPath, ref.id);
+        showPreview(ref.adocPath, ref.id);
       }
     ),
 
@@ -364,6 +419,75 @@ async function resolveReviewPair(
   const pdfPath = await pickPdf(adocPath);
   if (!pdfPath) return undefined;
   return { adocPath, pdfPath };
+}
+
+/**
+ * Discover every persisted review in the workspace by its `.review.json` sidecar
+ * and load it, so all pairs are known (and switchable) without first opening each
+ * .adoc. The source path is derived from the sidecar's name — a review.json next
+ * to `foo.adoc` is `foo.review.json`, next to `foo.asciidoc` is
+ * `foo.asciidoc.review.json` — and only loaded if the source file still exists.
+ */
+async function loadWorkspaceSidecars(store: ReviewStore): Promise<void> {
+  let files: vscode.Uri[];
+  try {
+    files = await vscode.workspace.findFiles(
+      "**/*.review.json",
+      "**/node_modules/**"
+    );
+  } catch {
+    return;
+  }
+  for (const f of files) {
+    const base = f.fsPath.replace(/\.review\.json$/i, "");
+    const adoc = [base, base + ".adoc", base + ".asciidoc"].find(
+      (p) => isAdocPath(p) && fs.existsSync(p)
+    );
+    if (adoc && !store.get(adoc)) store.tryLoadSidecar(adoc);
+  }
+}
+
+/** Pick a loaded review and open its .adoc so the tree/editor/preview follow. */
+async function switchReview(store: ReviewStore): Promise<void> {
+  const sessions = store.all();
+  if (sessions.length === 0) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: no reviews loaded — run 'Open PDF Review' first."
+    );
+    return;
+  }
+
+  interface Pick extends vscode.QuickPickItem {
+    adocPath: string;
+  }
+  const picks: Pick[] = sessions
+    .slice()
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((s) => {
+      const matched = s.items.filter(
+        (i) => effectiveLine(i) !== UNMATCHED
+      ).length;
+      const open = s.items.filter((i) => !i.resolved).length;
+      return {
+        label: path.basename(s.adocPath),
+        description: `${matched}/${s.items.length} mapped · ${open} open · ${path.basename(
+          s.pdfPath
+        )}`,
+        adocPath: s.adocPath,
+      };
+    });
+
+  const chosen = await vscode.window.showQuickPick(picks, {
+    title: "Switch review",
+    placeHolder: "Choose the .adoc / .pdf pair to review",
+  });
+  if (!chosen) return;
+
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(chosen.adocPath)
+  );
+  await vscode.window.showTextDocument(doc, { preview: false });
+  await vscode.commands.executeCommand("eddieDoc.annotations.focus");
 }
 
 /**
@@ -592,7 +716,7 @@ const TRIAGE_PREVIEW: vscode.QuickInputButton = {
  */
 async function triageUnmatched(
   store: ReviewStore,
-  preview: PdfPreviewPanel
+  showPreview: (adocPath: string, id: string) => void
 ): Promise<void> {
   const adocPath = resolveTargetAdoc(store);
   const session = adocPath ? store.get(adocPath) : undefined;
@@ -641,7 +765,7 @@ async function triageUnmatched(
       lineText,
       qi + 1,
       queue.length,
-      () => previewItem(store, preview, adocPath, item.id)
+      () => showPreview(adocPath, item.id)
     );
 
     if (action.type === "abort") break;
