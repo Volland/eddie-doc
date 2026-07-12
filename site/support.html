@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support — Eddie Doc</title>
+<meta name="description" content="Get help with Eddie Doc: report bugs, request features, and troubleshoot common issues with PDF-to-AsciiDoc annotation mapping.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M4.2 3.8 C4.2 8.2 4 9.4 5 12.4 C6 17.4 9 20 12 20 C15 20 18 17.4 19 12.4 C20 9.4 19.8 8.2 19.8 3.8 L15 6.8 C13 6 11 6 9 6.8 Z"/>
+        <path d="M7.3 10.7 Q8.5 9.3 9.7 10.2 Q8.5 11.3 7.3 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M16.7 10.7 Q15.5 9.3 14.3 10.2 Q15.5 11.3 16.7 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z"/>
+        <line x1="12" y1="14.7" x2="12" y2="18.5"/>
+        <circle cx="12" cy="13.8" r="0.72" fill="currentColor" stroke="none"/>
+        <path d="M8.7 14.4 L3.9 13.9 M8.9 15.9 L4.4 16.9 M15.3 14.4 L20.1 13.9 M15.1 15.9 L19.6 16.9"/>
+      </svg>
+      Eddie Doc
+    </a>
+    <span class="spacer"></span>
+    <a class="link" href="index.html">Home</a>
+    <a class="link" href="format.html">Review Format</a>
+    <a class="link" href="support.html">Support</a>
+    <a class="link gh" href="https://github.com/Volland/eddie-doc">GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="tag">Support</span>
+    <h1>Get help with Eddie Doc</h1>
+    <p class="lead">
+      Found a bug, hit a wall, or want a feature? Everything runs through the
+      GitHub issue tracker so it stays public and searchable. Most questions are
+      answered by the troubleshooting notes below.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/Volland/eddie-doc/issues/new?labels=bug&amp;title=%5BBug%5D%20">Report a bug</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/issues/new?labels=enhancement&amp;title=%5BFeature%5D%20">Request a feature</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/issues">Browse open issues</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="channels">
+  <div class="wrap">
+    <h2>Where to get help</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">◈</span> Bug reports</h3>
+        <p>Open a <a href="https://github.com/Volland/eddie-doc/issues/new?labels=bug&amp;title=%5BBug%5D%20">GitHub issue</a>. Include your VS&nbsp;Code version, the extension version, and — if you can — a small <code>.adoc</code> + annotated PDF that reproduces it.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">✦</span> Feature requests</h3>
+        <p>Describe the workflow you want in a <a href="https://github.com/Volland/eddie-doc/issues/new?labels=enhancement&amp;title=%5BFeature%5D%20">feature issue</a>. Real editorial pain points are the best input.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">▤</span> Questions &amp; docs</h3>
+        <p>Check the <a href="format.html">Review Format spec</a> and the <a href="https://github.com/Volland/eddie-doc#readme">README</a> first. Still stuck? Open a <a href="https://github.com/Volland/eddie-doc/issues">question issue</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="repro">
+  <div class="wrap">
+    <h2>Before you file a bug</h2>
+    <p class="sub">A good report gets a fast fix. Please include:</p>
+    <ol class="steps">
+      <li>The <b>extension version</b> (Extensions view → Eddie Doc) and your <b>VS&nbsp;Code version</b> (<em>Help → About</em>).</li>
+      <li>What you did, what you expected, and what happened instead.</li>
+      <li>If mapping is wrong: a minimal <code>.adoc</code> and the annotated PDF, or the relevant slice of the <code>&lt;file&gt;.review.json</code> sidecar.</li>
+      <li>Any errors from <em>Help → Toggle Developer Tools → Console</em>.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Troubleshooting</h2>
+    <p class="sub">The most common issues, and how to resolve them.</p>
+
+    <h3>My annotations land under “Unmatched”</h3>
+    <p>
+      The fuzzy matcher couldn't place the marked text above the confidence
+      threshold. Options, in order:
+    </p>
+    <ul>
+      <li>Put your cursor on the right line and run <b>Eddie Doc: Re-link to Current Cursor Line</b>, or use the <b>Triage</b> button on the <em>Unmatched</em> group to clear them in one pass.</li>
+      <li>Lower <code>eddieDoc.matchThreshold</code> (default <code>0.55</code>) if many correct matches are being rejected.</li>
+      <li>If the source and PDF have diverged a lot, enable the semantic fallback (below).</li>
+    </ul>
+
+    <h3>“Semantic fallback couldn't reach Ollama”</h3>
+    <p>
+      The optional embedding fallback is on but no Ollama server answered. Either
+      start Ollama with the model pulled (<code>ollama pull embeddinggemma</code>),
+      point <code>eddieDoc.ollamaUrl</code> at the right host, or turn the feature
+      off with <code>eddieDoc.semanticFallback: false</code>. It is off by default.
+    </p>
+
+    <h3>Nothing is extracted from my PDF</h3>
+    <p>
+      Eddie Doc reads real PDF <em>markup annotations</em> (highlights,
+      strikethroughs, comments, carets). If your PDF was <b>flattened</b> or
+      printed-to-PDF, the marks are baked into the page image and can't be
+      recovered — re-export keeping annotations live. Reply annotations and empty
+      marks with no comment are skipped by design.
+    </p>
+
+    <h3>A delete/replace changed more (or less) text than the mark</h3>
+    <p>
+      Character-precise edits use <code>markedText</code> aligned back through
+      AsciiDoc markup. If a mark only partially covered a word, Eddie Doc snaps to
+      whole words. When in doubt, use <b>Replace struck / highlighted text…</b> to
+      review the exact range before applying.
+    </p>
+
+    <h3>My resolved state disappeared after re-exporting the PDF</h3>
+    <p>
+      Item ids are derived from annotation geometry, so re-exporting a PDF at
+      different positions can produce new ids. Re-map, then re-link any items that
+      lost their state. The <code>&lt;file&gt;.review.json</code> sidecar is a
+      diffable record — commit it to keep review history.
+    </p>
+
+    <h3>The sidecar looks different after this version</h3>
+    <p>
+      Eddie Doc migrated it to <a href="format.html">Review Format v2</a>
+      automatically on the first save. Version-1 sidecars are read transparently;
+      no action needed. See the <a href="https://github.com/Volland/eddie-doc/blob/main/CHANGELOG.md">changelog</a>.
+    </p>
+  </div>
+</section>
+
+<section id="links">
+  <div class="wrap">
+    <h2>Useful links</h2>
+    <div class="cta">
+      <a class="btn" href="https://github.com/Volland/eddie-doc">Repository</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/issues">Issue tracker</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/blob/main/CHANGELOG.md">Changelog</a>
+      <a class="btn" href="format.html">Review Format</a>
+      <a class="btn" href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">Marketplace</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Eddie Doc — Support</span>
+    <span class="spacer"></span>
+    <a href="index.html">Home</a>
+    <a href="format.html">Review Format</a>
+    <a href="https://github.com/Volland/eddie-doc/issues">Issues</a>
+  </div>
+</footer>
+
+</body>
+</html>

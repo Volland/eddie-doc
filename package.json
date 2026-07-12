@@ -18,15 +18,22 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Linters"
   ],
   "keywords": [
     "asciidoc",
     "pdf",
     "annotations",
     "review",
-    "editing"
+    "editing",
+    "proofreading",
+    "adoc"
   ],
+  "galleryBanner": {
+    "color": "#2f6feb",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onLanguage:asciidoc",
     "workspaceContains:**/*.adoc",

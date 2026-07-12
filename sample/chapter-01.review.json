@@ -1,0 +1,171 @@
+{
+  "$schema": "https://volland.github.io/eddie-doc/schema/review-v2.schema.json",
+  "version": 2,
+  "producer": {
+    "name": "eddie-doc",
+    "version": "0.1.5"
+  },
+  "createdAt": "2026-07-03T07:15:17.937Z",
+  "updatedAt": "2026-07-03T07:15:17.937Z",
+  "source": {
+    "path": "chapter-01.adoc",
+    "sha256": "70506bf2ed81f93c8dabcf87742e0f8ac01f5d25fd691a00003f8342aee02a44",
+    "bytes": 1442
+  },
+  "pdf": {
+    "path": "chapter-01.annotated.pdf",
+    "sha256": "c8556922694d84b12d1abb17a85dbc4f4e7ffbeb324dc962613856d6ce5b27bc",
+    "annotationCount": 5
+  },
+  "items": [
+    {
+      "id": "p2-highlight-48-719",
+      "annotation": {
+        "kind": "highlight",
+        "author": "Editor",
+        "comment": "Strong framing — keep this.",
+        "anchoredText": "well-defined relationships. Unlike a relational database, a graph places relationships at the center of the model.",
+        "markedText": "relationships at the center of the model",
+        "geometry": {
+          "page": 2,
+          "unit": "pt",
+          "origin": "bottom-left",
+          "rect": [
+            48.2400016784668,
+            718.5800170898438,
+            547.0401611328125,
+            748.6400146484375
+          ]
+        }
+      },
+      "match": {
+        "startLine": 6,
+        "endLine": 7,
+        "score": 0.8870588235294117,
+        "sourceExcerpt": "are connected by well-defined relationships. Unlike a relational database, a graph places relationships at the center of the model."
+      },
+      "state": {
+        "resolved": false
+      }
+    },
+    {
+      "id": "p2-strikeout-131-675",
+      "annotation": {
+        "kind": "strikeout",
+        "author": "Editor",
+        "comment": "Delete: too advanced for an intro.",
+        "anchoredText": "simple triples to richer metagraph structures.",
+        "markedText": "richer metagraph structures",
+        "geometry": {
+          "page": 2,
+          "unit": "pt",
+          "origin": "bottom-left",
+          "rect": [
+            131.49449157714844,
+            675.02001953125,
+            272.97125244140625,
+            689.2999877929688
+          ]
+        }
+      },
+      "match": {
+        "startLine": 10,
+        "endLine": 10,
+        "score": 0.6799999999999999,
+        "sourceExcerpt": "We will move from simple triples to richer metagraph structures."
+      },
+      "state": {
+        "resolved": false
+      }
+    },
+    {
+      "id": "p3-comment-527-705",
+      "annotation": {
+        "kind": "comment",
+        "author": "Editor",
+        "comment": "Add a small diagram illustrating this edge.",
+        "anchoredText": "An entity is any distinct thing we wish to describe: a person, a place, a concept, or an event. Each",
+        "geometry": {
+          "page": 3,
+          "unit": "pt",
+          "origin": "bottom-left",
+          "rect": [
+            527.06887,
+            704.86,
+            543.06887,
+            720.86
+          ]
+        }
+      },
+      "match": {
+        "startLine": 14,
+        "endLine": 14,
+        "score": 0.8233511586452762,
+        "sourceExcerpt": "An *entity* is any distinct thing we wish to describe: a person, a place, a"
+      },
+      "state": {
+        "resolved": false
+      }
+    },
+    {
+      "id": "p4-highlight-48-734",
+      "annotation": {
+        "kind": "highlight",
+        "author": "Editor",
+        "comment": "Reword: 'trust or lineage'.",
+        "anchoredText": "Reification lets us make statements about statements. When we need to attach a confidence score or a provenance record to a fact, we treat the fact itself as a node that other edges can point to.",
+        "markedText": "confidence score or a provenance record to",
+        "geometry": {
+          "page": 4,
+          "unit": "pt",
+          "origin": "bottom-left",
+          "rect": [
+            48.2400016784668,
+            734.3600463867188,
+            547.0402221679688,
+            764.4199829101562
+          ]
+        }
+      },
+      "match": {
+        "startLine": 25,
+        "endLine": 27,
+        "score": 1,
+        "sourceExcerpt": "Reification lets us make statements about statements. When we need to attach a confidence score or a provenance record to a fact, we treat the fact itself as a node that other edges can point to."
+      },
+      "state": {
+        "resolved": false
+      }
+    },
+    {
+      "id": "p5-strikeout-263-750",
+      "annotation": {
+        "kind": "strikeout",
+        "author": "Editor",
+        "comment": "Cut — repeats the intro.",
+        "anchoredText": "Knowledge graphs put relationships first, entities are stable and reusable, and reification unlocks",
+        "markedText": "entities are stable and reusable",
+        "geometry": {
+          "page": 5,
+          "unit": "pt",
+          "origin": "bottom-left",
+          "rect": [
+            262.65850830078125,
+            750.1400146484375,
+            423.05926513671875,
+            764.4199829101562
+          ]
+        }
+      },
+      "match": {
+        "startLine": 34,
+        "endLine": 34,
+        "score": 0.8863636363636364,
+        "sourceExcerpt": "Knowledge graphs put relationships first, entities are stable and reusable, and"
+      },
+      "state": {
+        "resolved": false
+      }
+    }
+  ]
+}
