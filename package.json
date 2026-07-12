@@ -10,7 +10,7 @@
     "type": "git",
     "url": "https://github.com/Volland/eddie-doc.git"
   },
-  "homepage": "https://github.com/Volland/eddie-doc#readme",
+  "homepage": "https://volland.github.io/eddie-doc/",
   "bugs": {
     "url": "https://github.com/Volland/eddie-doc/issues"
   },
@@ -95,6 +95,11 @@
         "icon": "$(check-all)"
       },
       {
+        "command": "eddieDoc.triageUnmatched",
+        "title": "Eddie Doc: Triage Unmatched Annotations",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "eddieDoc.previewAnnotation",
         "title": "Eddie Doc: Preview in PDF",
         "icon": "$(file-media)"
@@ -140,9 +145,19 @@
           "command": "eddieDoc.applyAllEdits",
           "when": "view == eddieDoc.annotations",
           "group": "navigation@3"
+        },
+        {
+          "command": "eddieDoc.triageUnmatched",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
+        {
+          "command": "eddieDoc.triageUnmatched",
+          "when": "view == eddieDoc.annotations && viewItem == group.unmatched",
+          "group": "inline@0"
+        },
         {
           "command": "eddieDoc.confirmMatch",
           "when": "view == eddieDoc.annotations && viewItem == annotation.review",

@@ -1,5 +1,9 @@
 import * as assert from "node:assert";
-import { buildSourceIndex, matchAnchor } from "../matching/fuzzyMatch.js";
+import {
+  buildSourceIndex,
+  matchAnchor,
+  topMatches,
+} from "../matching/fuzzyMatch.js";
 
 const SOURCE = [
   "= Chapter One", // 0
@@ -69,5 +73,53 @@ describe("matchAnchor", () => {
     assert.strictEqual(m!.startLine, 4);
     assert.strictEqual(m!.endLine, 5);
     assert.ok(m!.score > 0.7, `score ${m!.score}`);
+  });
+});
+
+describe("topMatches", () => {
+  const idx = buildSourceIndex(SOURCE);
+
+  it("ranks the true source line first", () => {
+    const cands = topMatches(
+      "An entity is any distinct thing we wish to describe",
+      idx,
+      5
+    );
+    assert.ok(cands.length > 0, "expected candidates");
+    assert.strictEqual(cands[0].startLine, 4);
+  });
+
+  it("returns candidates in descending score order, capped at k", () => {
+    const cands = topMatches("entity relationship", idx, 3);
+    assert.ok(cands.length <= 3, `got ${cands.length}`);
+    for (let i = 1; i < cands.length; i++) {
+      assert.ok(
+        cands[i - 1].score >= cands[i].score,
+        `not sorted at ${i}: ${cands[i - 1].score} < ${cands[i].score}`
+      );
+    }
+  });
+
+  it("dedupes by start line — one candidate per source line", () => {
+    const cands = topMatches("entity", idx, 10);
+    const starts = cands.map((c) => c.startLine);
+    assert.strictEqual(
+      new Set(starts).size,
+      starts.length,
+      "duplicate start lines in candidate list"
+    );
+  });
+
+  it("returns nothing for empty anchors or k <= 0", () => {
+    assert.deepStrictEqual(topMatches("", idx, 5), []);
+    assert.deepStrictEqual(topMatches("entity", idx, 0), []);
+  });
+
+  it("surfaces a below-threshold line matchAnchor would still pick", () => {
+    // Weak overlap: topMatches must still offer the best-effort line so the
+    // triage flow has something to propose even when auto-mapping declines it.
+    const cands = topMatches("relationship connects entities", idx, 5);
+    assert.ok(cands.length > 0);
+    assert.strictEqual(cands[0].startLine, 7);
   });
 });

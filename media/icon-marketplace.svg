@@ -1,9 +1,18 @@
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" rx="26" fill="#2f6feb"/>
-  <g transform="translate(32,26) scale(2.67)" stroke="#ffffff" fill="none" stroke-width="1.6">
-    <path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>
-    <path d="M14 4v5h5"/>
-    <rect x="6.5" y="12" width="9" height="2.2" rx="1" fill="#ffd34d" stroke="none"/>
-    <path d="M6.5 16.5h6" stroke-linecap="round"/>
+  <rect width="128" height="128" rx="28" fill="#2f6feb"/>
+  <g transform="translate(19.6,20) scale(3.7)" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- gold nib fill behind the outline -->
+    <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z" fill="#ffd34d" stroke="none"/>
+    <!-- cat head -->
+    <path d="M4.2 3.8 C4.2 8.2 4 9.4 5 12.4 C6 17.4 9 20 12 20 C15 20 18 17.4 19 12.4 C20 9.4 19.8 8.2 19.8 3.8 L15 6.8 C13 6 11 6 9 6.8 Z"/>
+    <!-- eyes -->
+    <path d="M7.3 10.7 Q8.5 9.3 9.7 10.2 Q8.5 11.3 7.3 10.7 Z" fill="#ffffff" stroke="none"/>
+    <path d="M16.7 10.7 Q15.5 9.3 14.3 10.2 Q15.5 11.3 16.7 10.7 Z" fill="#ffffff" stroke="none"/>
+    <!-- nib outline + slit + breather hole -->
+    <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z"/>
+    <line x1="12" y1="14.7" x2="12" y2="18.5"/>
+    <circle cx="12" cy="13.8" r="0.72" fill="#2f6feb" stroke="none"/>
+    <!-- whiskers -->
+    <path d="M8.7 14.4 L3.9 13.9 M8.9 15.9 L4.4 16.9 M15.3 14.4 L20.1 13.9 M15.1 15.9 L19.6 16.9"/>
   </g>
 </svg>

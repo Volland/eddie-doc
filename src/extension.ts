@@ -7,6 +7,11 @@ import { DecorationManager } from "./ui/decorations.js";
 import { DiagnosticsManager } from "./ui/diagnostics.js";
 import { EddieCodeActionProvider } from "./ui/codeActions.js";
 import { effectiveLine } from "./matching/mapper.js";
+import {
+  buildSourceIndex,
+  topMatches,
+  type Candidate,
+} from "./matching/fuzzyMatch.js";
 import type { ReviewItem } from "./model/types.js";
 import { KIND_LABEL } from "./model/types.js";
 import { countNewlines, type ContentChange } from "./matching/posTrack.js";
@@ -261,6 +266,12 @@ export function activate(context: vscode.ExtensionContext): void {
     // step, after a preview.
     vscode.commands.registerCommand("eddieDoc.applyAllEdits", async () => {
       await applyAllEdits(store);
+    }),
+
+    // Walk every unmatched annotation in one pass, each with a ranked shortlist
+    // of candidate source lines to link (or skip) without cursor-hunting.
+    vscode.commands.registerCommand("eddieDoc.triageUnmatched", async () => {
+      await triageUnmatched(store, preview);
     }),
 
     // Open (or update) the PDF preview showing this annotation's page + mark.
@@ -544,6 +555,193 @@ async function relinkViaPick(store: ReviewStore, ref: ItemRef): Promise<void> {
   vscode.window.showInformationMessage(
     `Eddie Doc: linked to line ${chosen.line + 1}.`
   );
+}
+
+// ---- Unmatched batch triage ----------------------------------------------
+
+/** How many ranked candidate lines to surface per unmatched item. */
+const TRIAGE_CANDIDATES = 6;
+
+type TriageAction =
+  | { type: "link"; line: number }
+  | { type: "skip" }
+  | { type: "abort" };
+
+interface TriagePick extends vscode.QuickPickItem {
+  /** Absent on separator rows. */
+  line?: number;
+}
+
+const TRIAGE_SKIP: vscode.QuickInputButton = {
+  iconPath: new vscode.ThemeIcon("arrow-right"),
+  tooltip: "Skip — leave this one unmatched",
+};
+const TRIAGE_PREVIEW: vscode.QuickInputButton = {
+  iconPath: new vscode.ThemeIcon("file-media"),
+  tooltip: "Preview this annotation in the PDF",
+};
+
+/**
+ * Resolve the Unmatched pile in a single keyboard-driven pass. For each
+ * unmatched annotation we show a QuickPick whose top rows are the best-scoring
+ * candidate source lines (from {@link topMatches}) with the strongest
+ * pre-selected — Enter links it and auto-advances, the → button skips, Escape
+ * stops. Below the suggestions the full line list is available for free search,
+ * exactly like the single-item Reselect flow. Unlike Reselect, one invocation
+ * clears the whole backlog.
+ */
+async function triageUnmatched(
+  store: ReviewStore,
+  preview: PdfPreviewPanel
+): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const session = adocPath ? store.get(adocPath) : undefined;
+  if (!adocPath || !session) {
+    vscode.window.showInformationMessage("Eddie Doc: no review loaded.");
+    return;
+  }
+
+  // Snapshot the current unmatched, unresolved items up front — linking mutates
+  // the session as we go, so we iterate over ids captured now.
+  const queue = session.items.filter(
+    (i) => !i.resolved && effectiveLine(i) === UNMATCHED
+  );
+  if (queue.length === 0) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: no unmatched annotations to triage."
+    );
+    return;
+  }
+
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(adocPath)
+  );
+  const editor = await vscode.window.showTextDocument(doc, { preview: false });
+  const idx = buildSourceIndex(doc.getText());
+  const lineText = (n: number) => doc.lineAt(n).text.trim();
+
+  let linked = 0;
+  let skipped = 0;
+
+  for (let qi = 0; qi < queue.length; qi++) {
+    const snapshot = queue[qi];
+    // The item may have been resolved/linked by an earlier step in this run.
+    const item = store.findItem(adocPath, snapshot.id);
+    if (!item || item.resolved || effectiveLine(item) !== UNMATCHED) continue;
+
+    const anchorRaw = item.anchoredText || item.comment || "";
+    const anchor = anchorRaw.replace(/\s+/g, " ").trim();
+    const cands = topMatches(anchorRaw, idx, TRIAGE_CANDIDATES);
+
+    const action = await triageOne(
+      doc,
+      item,
+      anchor,
+      cands,
+      lineText,
+      qi + 1,
+      queue.length,
+      () => previewItem(store, preview, adocPath, item.id)
+    );
+
+    if (action.type === "abort") break;
+    if (action.type === "skip") {
+      skipped++;
+      continue;
+    }
+    // link
+    store.relink(adocPath, item.id, action.line);
+    linked++;
+    const range = doc.lineAt(Math.min(action.line, doc.lineCount - 1)).range;
+    editor.selection = new vscode.Selection(range.start, range.start);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+  }
+
+  const left = queue.length - linked - skipped;
+  vscode.window.showInformationMessage(
+    `Eddie Doc: triage — ${linked} linked, ${skipped} skipped` +
+      (left > 0 ? `, ${left} not reached.` : ".")
+  );
+}
+
+/** Present one unmatched item's shortlist; resolve to the user's choice. */
+function triageOne(
+  doc: vscode.TextDocument,
+  item: ReviewItem,
+  anchor: string,
+  cands: Candidate[],
+  lineText: (n: number) => string,
+  position: number,
+  total: number,
+  onPreview: () => void
+): Promise<TriageAction> {
+  const candLines = new Set(cands.map((c) => c.startLine));
+  const picks: TriagePick[] = [];
+
+  if (cands.length) {
+    picks.push({
+      label: "Suggestions",
+      kind: vscode.QuickPickItemKind.Separator,
+    });
+    for (const c of cands) {
+      picks.push({
+        label: `Line ${c.startLine + 1}`,
+        description: `${c.score.toFixed(2)} · ${clip(lineText(c.startLine), 90)}`,
+        line: c.startLine,
+      });
+    }
+    picks.push({
+      label: "All lines",
+      kind: vscode.QuickPickItemKind.Separator,
+    });
+  }
+  for (let n = 0; n < doc.lineCount; n++) {
+    if (candLines.has(n)) continue; // already shown as a suggestion
+    const text = lineText(n);
+    if (!text) continue;
+    picks.push({
+      label: `Line ${n + 1}`,
+      description: clip(text, 100),
+      line: n,
+    });
+  }
+
+  return new Promise<TriageAction>((resolve) => {
+    const qp = vscode.window.createQuickPick<TriagePick>();
+    qp.title = `Triage unmatched ${position}/${total} — ${KIND_LABEL[item.kind]}`;
+    qp.placeholder = anchor
+      ? `“${clip(anchor, 70)}” — Enter to link the highlighted line, → to skip`
+      : "Pick the source line to link this annotation to, or → to skip";
+    qp.matchOnDescription = true;
+    qp.items = picks;
+    qp.buttons = [TRIAGE_PREVIEW, TRIAGE_SKIP];
+    // Pre-highlight the strongest suggestion (first row carrying a line).
+    const first = picks.find((p) => p.line != null);
+    if (first) qp.activeItems = [first];
+
+    let done = false;
+    const finish = (a: TriageAction) => {
+      if (done) return;
+      done = true;
+      resolve(a);
+      qp.hide();
+    };
+
+    qp.onDidAccept(() => {
+      const sel = qp.selectedItems[0];
+      if (sel && sel.line != null) finish({ type: "link", line: sel.line });
+    });
+    qp.onDidTriggerButton((b) => {
+      if (b === TRIAGE_SKIP) finish({ type: "skip" });
+      else if (b === TRIAGE_PREVIEW) onPreview();
+    });
+    // Dismissed (Escape) without a choice = stop the whole run.
+    qp.onDidHide(() => {
+      finish({ type: "abort" });
+      qp.dispose();
+    });
+    qp.show();
+  });
 }
 
 /** Open/refresh the PDF preview for an annotation (matched or not). */

@@ -10,6 +10,8 @@ interface GroupNode {
   type: "group";
   label: string;
   children: ItemNode[];
+  /** Tree contextValue, so group-specific inline actions can be targeted. */
+  context?: string;
 }
 
 interface ItemNode {
@@ -70,8 +72,9 @@ export class AnnotationTreeProvider
       const done = items.filter((i) => i.resolved);
 
       const groups: GroupNode[] = [];
-      const add = (label: string, arr: ItemNode[]) => {
-        if (arr.length) groups.push({ type: "group", label, children: arr });
+      const add = (label: string, arr: ItemNode[], context?: string) => {
+        if (arr.length)
+          groups.push({ type: "group", label, children: arr, context });
       };
       add(`Open (${open.length})`, toItems(open, session.adocPath));
       add(
@@ -80,7 +83,8 @@ export class AnnotationTreeProvider
       );
       add(
         `Unmatched (${unmatched.length})`,
-        toItems(unmatched, session.adocPath)
+        toItems(unmatched, session.adocPath),
+        "group.unmatched"
       );
       add(`Resolved (${done.length})`, toItems(done, session.adocPath));
       return groups;
@@ -96,7 +100,7 @@ export class AnnotationTreeProvider
         node.label,
         vscode.TreeItemCollapsibleState.Expanded
       );
-      ti.contextValue = "group";
+      ti.contextValue = node.context ?? "group";
       return ti;
     }
 

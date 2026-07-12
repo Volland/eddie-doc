@@ -51,7 +51,10 @@ you've handled.
    - Click an item to jump to its source line.
    - Hover a marked line to read the comment and mark it resolved.
    - An annotation whose text couldn't be located lands under **Unmatched** —
-     put your cursor on the right line and run **Re-link to Current Cursor Line**.
+     put your cursor on the right line and run **Re-link to Current Cursor Line**,
+     or clear the whole pile at once with the **Triage** button on the
+     *Unmatched* group: it walks each item with a pre-ranked shortlist of
+     candidate lines so you link or skip them in a single keyboard pass.
 4. Edit your `.adoc`, then run **Re-map Annotations** to re-check positions
    against the edited source. Resolution state is preserved across re-maps.
 
@@ -64,6 +67,7 @@ you've handled.
 | `Eddie Doc: Next / Previous Annotation` | Jump between annotated lines |
 | `Eddie Doc: Toggle Resolved` | Mark an item done / open |
 | `Eddie Doc: Re-link to Current Cursor Line` | Override the match for an item |
+| `Eddie Doc: Triage Unmatched Annotations` | Walk every unmatched item, each with a ranked shortlist of candidate lines, and link or skip in one pass |
 
 ### Settings
 
@@ -86,6 +90,25 @@ span above the threshold wins.
 Because it's fuzzy, mapping is robust to the source and PDF not being
 character-identical, but it isn't infallible: low-confidence matches surface as
 *Unmatched* for a one-click manual re-link rather than guessing.
+
+## The review sidecar (`.review.json`)
+
+The sidecar is a **portable, versioned, tool-agnostic** file you can commit and
+diff. Each item keeps the PDF-derived annotation, the matcher's mapping, and
+your review state in separate blocks; paths are relative to the sidecar and
+content hashes let a consumer detect stale inputs. It's specified as a small
+standard so a CLI, CI gate, or another editor can read it:
+
+- **Spec:** [docs/FORMAT.md](docs/FORMAT.md)
+- **JSON Schema:** [schema/review-v2.schema.json](schema/review-v2.schema.json)
+
+```bash
+# validate a sidecar against the schema
+npx ajv-cli validate --spec=draft2020 --strict=false \
+  -s schema/review-v2.schema.json -d path/to/chapter-01.review.json
+```
+
+Version 1 sidecars are migrated to version 2 transparently on first write.
 
 ## Development
 

@@ -66,15 +66,40 @@ export interface ReviewItem extends RawAnnotation {
   note?: string;
 }
 
-/** The persisted per-document review session (sidecar `<file>.review.json`). */
+/**
+ * Content fingerprints of the inputs a session was built from. Cached in memory
+ * when the files are read (load / re-map) and written into the sidecar so a
+ * consumer can detect that the source or PDF changed since mapping ran. All
+ * fields are optional: a freshly-migrated v1 session has none until it re-maps.
+ */
+export interface SessionIntegrity {
+  /** SHA-256 (hex) of the source `.adoc` bytes at map time. */
+  sourceSha256?: string;
+  /** Size of the source `.adoc` in bytes at map time. */
+  sourceBytes?: number;
+  /** SHA-256 (hex) of the annotated PDF bytes at map time. */
+  pdfSha256?: string;
+  /** Number of annotations extracted from the PDF. */
+  pdfAnnotationCount?: number;
+}
+
+/**
+ * In-memory per-document review session. This is the domain model the UI,
+ * matching and store operate on — paths are absolute and items are flat. It is
+ * serialized to / from the portable on-disk standard by `model/format.ts`; the
+ * sidecar file itself is NOT this shape (see `docs/FORMAT.md`).
+ */
 export interface ReviewSession {
-  version: 1;
-  /** Absolute or workspace-relative path to the source .adoc. */
+  /** On-disk format version this session most recently round-tripped through. */
+  version: 1 | 2;
+  /** Absolute path to the source .adoc (the store key). */
   adocPath: string;
-  /** Path to the annotated PDF this session was built from. */
+  /** Absolute path to the annotated PDF this session was built from. */
   pdfPath: string;
   createdAt: string;
   updatedAt: string;
+  /** Fingerprints of the inputs, when known. */
+  integrity?: SessionIntegrity;
   items: ReviewItem[];
 }
 

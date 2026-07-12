@@ -136,3 +136,78 @@ function finalize(
       .slice(0, 200),
   };
 }
+
+/** A ranked candidate span for an anchor — a match proposal, threshold aside. */
+export interface Candidate {
+  /** 0-based start line of the best-scoring span anchored here. */
+  startLine: number;
+  /** 0-based end line (inclusive). */
+  endLine: number;
+  /** 0-1 similarity of the span. */
+  score: number;
+}
+
+/**
+ * Rank the best candidate source spans for `anchor`, best score first.
+ *
+ * Unlike {@link matchAnchor} — which returns only the single winner and hides
+ * everything below the map threshold — this keeps the best span per distinct
+ * start line and returns the top `k`. It's the data behind the Unmatched
+ * batch-triage flow: an editor whose highlight the token matcher couldn't place
+ * confidently still gets a short, ranked shortlist to choose from in one pass.
+ *
+ * Returns an empty array when the anchor has no usable tokens or the source is
+ * empty.
+ */
+export function topMatches(
+  anchor: string,
+  idx: SourceIndex,
+  k: number,
+  opts: Partial<MatchOptions> = {}
+): Candidate[] {
+  const { maxSpanLines } = { ...DEFAULTS, ...opts };
+  const query = queryTokens(anchor);
+  const flat = idx.flat;
+  if (query.length === 0 || flat.length === 0 || k <= 0) return [];
+
+  const need = counts(query);
+  const m = query.length;
+  const maxWin = Math.min(flat.length, m * 2 + 8);
+
+  // Best (highest-scoring) span found starting at each distinct source line.
+  const bestByStart = new Map<number, { endLine: number; score: number }>();
+
+  for (let i = 0; i < flat.length; i++) {
+    if (!need.has(flat[i].t)) continue;
+
+    const have = new Map<string, number>();
+    let overlap = 0;
+    const end = Math.min(flat.length, i + maxWin);
+    const startLine = flat[i].line;
+
+    for (let e = i; e < end; e++) {
+      const endLine = flat[e].line;
+      if (endLine - startLine >= maxSpanLines) break;
+
+      const x = flat[e].t;
+      const h = (have.get(x) || 0) + 1;
+      have.set(x, h);
+      if (h <= (need.get(x) || 0)) overlap++;
+
+      const winLen = e - i + 1;
+      const score = (2 * overlap) / (m + winLen);
+      const prev = bestByStart.get(startLine);
+      if (!prev || score > prev.score) {
+        bestByStart.set(startLine, { endLine, score });
+      }
+    }
+  }
+
+  const cands: Candidate[] = [];
+  for (const [startLine, v] of bestByStart) {
+    cands.push({ startLine, endLine: v.endLine, score: v.score });
+  }
+  // Highest score first; break ties by earliest line for a stable order.
+  cands.sort((a, b) => b.score - a.score || a.startLine - b.startLine);
+  return cands.slice(0, k);
+}

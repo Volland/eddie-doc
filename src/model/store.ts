@@ -1,6 +1,12 @@
 import * as fs from "node:fs";
 import * as vscode from "vscode";
-import type { RawAnnotation, ReviewItem, ReviewSession } from "./types.js";
+import type {
+  RawAnnotation,
+  ReviewItem,
+  ReviewSession,
+  SessionIntegrity,
+} from "./types.js";
+import { parse, serialize, sha256 } from "./format.js";
 import { extractAnnotations } from "../pdf/extract.js";
 import { mapAnnotations, matchOne } from "../matching/mapper.js";
 import { buildSourceIndex } from "../matching/fuzzyMatch.js";
@@ -49,11 +55,11 @@ export class ReviewStore {
     const p = sidecarPath(adocPath);
     if (!fs.existsSync(p)) return undefined;
     try {
-      const data = JSON.parse(fs.readFileSync(p, "utf8")) as ReviewSession;
-      if (data && data.version === 1) {
-        this.sessions.set(adocPath, data);
+      const session = parse(fs.readFileSync(p, "utf8"), p, adocPath);
+      if (session) {
+        this.sessions.set(adocPath, session);
         this._onDidChange.fire(adocPath);
-        return data;
+        return session;
       }
     } catch {
       /* corrupt sidecar — ignore, user can re-map */
@@ -68,7 +74,8 @@ export class ReviewStore {
     threshold: number
   ): Promise<ReviewSession> {
     const bytes = new Uint8Array(fs.readFileSync(pdfPath));
-    const source = fs.readFileSync(adocPath, "utf8");
+    const sourceBytes = fs.readFileSync(adocPath);
+    const source = sourceBytes.toString("utf8");
     const annots = await extractAnnotations(bytes);
     const prev = this.sessions.get(adocPath)?.items;
     const items = mapAnnotations(annots, source, { threshold }, prev);
@@ -76,11 +83,17 @@ export class ReviewStore {
 
     const now = new Date().toISOString();
     const session: ReviewSession = {
-      version: 1,
+      version: 2,
       adocPath,
       pdfPath,
       createdAt: this.sessions.get(adocPath)?.createdAt ?? now,
       updatedAt: now,
+      integrity: {
+        sourceSha256: sha256(new Uint8Array(sourceBytes)),
+        sourceBytes: sourceBytes.length,
+        pdfSha256: sha256(bytes),
+        pdfAnnotationCount: annots.length,
+      },
       items,
     };
     this.sessions.set(adocPath, session);
@@ -97,12 +110,19 @@ export class ReviewStore {
   async remap(adocPath: string, threshold: number): Promise<void> {
     const session = this.sessions.get(adocPath);
     if (!session) return;
-    const source = fs.readFileSync(adocPath, "utf8");
+    const sourceBytes = fs.readFileSync(adocPath);
+    const source = sourceBytes.toString("utf8");
     const raw = session.items.map(toRaw);
     const items = mapAnnotations(raw, source, { threshold }, session.items);
     await this.runSemantic(items, source);
     session.items = items;
+    session.version = 2;
     session.updatedAt = new Date().toISOString();
+    session.integrity = {
+      ...session.integrity,
+      sourceSha256: sha256(new Uint8Array(sourceBytes)),
+      sourceBytes: sourceBytes.length,
+    } satisfies SessionIntegrity;
     this.persist(adocPath);
     this._onDidChange.fire(adocPath);
   }
@@ -211,8 +231,11 @@ export class ReviewStore {
   private persist(adocPath: string): void {
     const s = this.sessions.get(adocPath);
     if (!s) return;
+    const p = sidecarPath(adocPath);
     try {
-      fs.writeFileSync(sidecarPath(adocPath), JSON.stringify(s, null, 2), "utf8");
+      // Any write upgrades the sidecar to the current on-disk standard.
+      s.version = 2;
+      fs.writeFileSync(p, serialize(s, p), "utf8");
     } catch (e) {
       vscode.window.showWarningMessage(
         `Eddie Doc: could not save review sidecar: ${String(e)}`

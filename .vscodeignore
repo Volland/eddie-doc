@@ -16,3 +16,7 @@ RELEASE_NOTES_*.md
 release.sh
 build.sh
 install.sh
+site/**
+schema/**
+docs/**
+.github/**
