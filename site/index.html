@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eddie Doc — AsciiDoc PDF Review</title>
+<meta name="description" content="Eddie Doc reads an editor's annotated PDF and maps every highlight, strikethrough, and comment back to the exact line in your AsciiDoc source — as navigable, resolvable review items in VS Code.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M4.2 3.8 C4.2 8.2 4 9.4 5 12.4 C6 17.4 9 20 12 20 C15 20 18 17.4 19 12.4 C20 9.4 19.8 8.2 19.8 3.8 L15 6.8 C13 6 11 6 9 6.8 Z"/>
+        <path d="M7.3 10.7 Q8.5 9.3 9.7 10.2 Q8.5 11.3 7.3 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M16.7 10.7 Q15.5 9.3 14.3 10.2 Q15.5 11.3 16.7 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z"/>
+        <line x1="12" y1="14.7" x2="12" y2="18.5"/>
+        <circle cx="12" cy="13.8" r="0.72" fill="currentColor" stroke="none"/>
+        <path d="M8.7 14.4 L3.9 13.9 M8.9 15.9 L4.4 16.9 M15.3 14.4 L20.1 13.9 M15.1 15.9 L19.6 16.9"/>
+      </svg>
+      Eddie Doc
+    </a>
+    <span class="spacer"></span>
+    <a class="link" href="index.html#features">Features</a>
+    <a class="link" href="index.html#how">How it works</a>
+    <a class="link" href="format.html">Review Format</a>
+    <a class="link gh" href="https://github.com/Volland/eddie-doc">GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-logo" aria-hidden="true">
+      <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+        <rect width="128" height="128" rx="28" fill="#2f6feb"/>
+        <g transform="translate(19.6,20) scale(3.7)" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z" fill="#ffd34d" stroke="none"/>
+          <path d="M4.2 3.8 C4.2 8.2 4 9.4 5 12.4 C6 17.4 9 20 12 20 C15 20 18 17.4 19 12.4 C20 9.4 19.8 8.2 19.8 3.8 L15 6.8 C13 6 11 6 9 6.8 Z"/>
+          <path d="M7.3 10.7 Q8.5 9.3 9.7 10.2 Q8.5 11.3 7.3 10.7 Z" fill="#ffffff" stroke="none"/>
+          <path d="M16.7 10.7 Q15.5 9.3 14.3 10.2 Q15.5 11.3 16.7 10.7 Z" fill="#ffffff" stroke="none"/>
+          <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z"/>
+          <line x1="12" y1="14.7" x2="12" y2="18.5"/>
+          <circle cx="12" cy="13.8" r="0.72" fill="#2f6feb" stroke="none"/>
+          <path d="M8.7 14.4 L3.9 13.9 M8.9 15.9 L4.4 16.9 M15.3 14.4 L20.1 13.9 M15.1 15.9 L19.6 16.9"/>
+        </g>
+      </svg>
+    </div>
+    <span class="tag">VS Code Extension</span>
+    <h1>Turn an editor's annotated PDF back into source edits.</h1>
+    <p class="lead">
+      You write in AsciiDoc, ship a PDF, and get it back covered in highlights,
+      strikethroughs, and sticky notes. Eddie Doc reads that PDF, recovers the text
+      under each mark, and maps every annotation to the exact line in your
+      <code>.adoc</code> — as navigable, resolvable review items.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">Install from Marketplace</a>
+      <a class="btn" href="format.html">Read the Review Format →</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="demo-intro">
+  <div class="wrap">
+    <h2>From marks to mapped edits</h2>
+    <p class="sub">Every markup in the PDF becomes a review item anchored to a source line.</p>
+    <div class="demo">
+      <div class="doc">
+        Entities are connected by well-defined relationships. Unlike a relational
+        database, a graph places <mark class="hl">relationships at the center of the
+        model</mark>. We will move from simple triples to <span class="strike">richer
+        metagraph structures</span>.
+      </div>
+      <div class="note">
+        <b>Highlight</b> → <i>“Strong framing — keep this.”</i> mapped to line&nbsp;7 ·
+        <b>Delete</b> → <i>“Too advanced for an intro.”</i> mapped to line&nbsp;11 ·
+        character-precise so only the struck words are removed.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="sub">Extract, map, review, and act — without ever rewriting your prose automatically.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">◈</span> Extracts</h3>
+        <p>Highlights, strikethroughs, underlines, sticky-note comments and caret/insert marks from the PDF via <code>pdfjs</code> — including the comment body and author.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⇄</span> Maps</h3>
+        <p>Fuzzy text matching that strips AsciiDoc syntax first, so a highlighted phrase lines up with your markup-laden source. Unicode-aware (incl. Cyrillic).</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">▤</span> Shows</h3>
+        <p>An activity-bar tree grouped <em>Open / Needs review / Unmatched / Resolved</em>, inline decorations with hovers, and Problems-panel diagnostics.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">✎</span> Acts</h3>
+        <p>Lightbulb quick-fixes: delete struck text character-precisely, replace a marked range, insert at a caret offset, or pull a remark in as a comment. All explicit and undoable.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">☰</span> Triages</h3>
+        <p>Clear a pile of unmatched marks in one keyboard pass, each with a pre-ranked shortlist of candidate source lines to link or skip.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⤓</span> Tracks</h3>
+        <p>Resolution state and manual re-links persist in a diffable sidecar, <code>&lt;file&gt;.review.json</code>, next to your <code>.adoc</code> — preserved across re-maps.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How mapping works</h2>
+    <p class="sub">Robust to the source and PDF not being character-identical.</p>
+    <ol class="steps">
+      <li>PDF markup annotations carry <em>quadPoints</em> — per-line rectangles over the marked text. Eddie Doc intersects those with the positioned text of each page to recover the words under the mark.</li>
+      <li>Both the recovered text and every source line are normalized — AsciiDoc delimiters, roles, macros and inline markers stripped, lowercased, punctuation removed.</li>
+      <li>They're compared with a blended Sørensen–Dice (bigram) + token-overlap score over a sliding window of source lines. The best span above the threshold wins.</li>
+      <li>Low-confidence matches surface as <em>Unmatched</em> for a one-click manual re-link, rather than guessing.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="workflow">
+  <div class="wrap">
+    <h2>The workflow</h2>
+    <p class="sub"><b>Navigate + review, edit by hand.</b> Eddie Doc points you at the right line and remembers what you've handled.</p>
+    <ol class="steps">
+      <li>Open the <code>.adoc</code> you're reviewing and run <b>Eddie Doc: Open PDF Review for AsciiDoc</b>. Pick the annotated PDF.</li>
+      <li>Annotations appear in the sidebar and as inline markers. Click to jump; hover a line to read the comment and mark it resolved.</li>
+      <li>Edit your <code>.adoc</code>, then run <b>Re-map Annotations</b> to re-check positions. Resolution state is preserved across re-maps.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="sidecar">
+  <div class="wrap">
+    <h2>An open, portable artifact</h2>
+    <p class="sub">The review lives in a committable, tool-agnostic sidecar — not locked inside the editor.</p>
+    <p>
+      Every review is stored as <code>&lt;file&gt;.review.json</code> in the
+      <strong>Eddie Doc Review Format</strong>: a versioned, schema-validated
+      standard with relative paths and content hashes, so it travels with your repo
+      and can be read by a CLI, a CI gate, or another editor.
+    </p>
+    <div class="cta" style="margin-top:20px">
+      <a class="btn primary" href="format.html">Review Format spec →</a>
+      <a class="btn" href="schema/review-v2.schema.json">JSON Schema</a>
+      <a class="btn" href="sample/chapter-01.review.json">Sample sidecar</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Eddie Doc — AsciiDoc PDF Review</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/Volland/eddie-doc">GitHub</a>
+    <a href="format.html">Review Format</a>
+    <a href="schema/review-v2.schema.json">Schema</a>
+  </div>
+</footer>
+
+</body>
+</html>

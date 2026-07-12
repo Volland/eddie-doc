@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eddie Doc Review Format v2</title>
+<meta name="description" content="The Eddie Doc Review Format: a portable, versioned, schema-validated JSON standard that maps PDF review annotations back to AsciiDoc source.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M4.2 3.8 C4.2 8.2 4 9.4 5 12.4 C6 17.4 9 20 12 20 C15 20 18 17.4 19 12.4 C20 9.4 19.8 8.2 19.8 3.8 L15 6.8 C13 6 11 6 9 6.8 Z"/>
+        <path d="M7.3 10.7 Q8.5 9.3 9.7 10.2 Q8.5 11.3 7.3 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M16.7 10.7 Q15.5 9.3 14.3 10.2 Q15.5 11.3 16.7 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z"/>
+        <line x1="12" y1="14.7" x2="12" y2="18.5"/>
+        <circle cx="12" cy="13.8" r="0.72" fill="currentColor" stroke="none"/>
+        <path d="M8.7 14.4 L3.9 13.9 M8.9 15.9 L4.4 16.9 M15.3 14.4 L20.1 13.9 M15.1 15.9 L19.6 16.9"/>
+      </svg>
+      Eddie Doc
+    </a>
+    <span class="spacer"></span>
+    <a class="link" href="index.html">Home</a>
+    <a class="link" href="#items">Items</a>
+    <a class="link" href="schema/review-v2.schema.json">Schema</a>
+    <a class="link gh" href="https://github.com/Volland/eddie-doc">GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="tag">Specification · Version 2</span>
+    <h1>Eddie Doc Review Format</h1>
+    <p class="lead">
+      A portable, versioned, schema-validated JSON file — <code>&lt;file&gt;.review.json</code> —
+      that maps PDF review annotations back to AsciiDoc source. Built to be committed,
+      diffed, and read by tools other than the editor.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="schema/review-v2.schema.json">JSON Schema</a>
+      <a class="btn" href="sample/chapter-01.review.json">Sample sidecar</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/blob/main/docs/FORMAT.md">Spec on GitHub</a>
+    </div>
+    <p class="muted" style="margin-top:22px">
+      Media type <span class="pill">application/vnd.eddie-doc.review+json</span>
+      &nbsp;·&nbsp; Canonical schema
+      <a href="schema/review-v2.schema.json"><code>volland.github.io/eddie-doc/schema/review-v2.schema.json</code></a>
+    </p>
+  </div>
+</header>
+
+<main>
+
+<section id="goals">
+  <div class="wrap">
+    <h2>Design goals</h2>
+    <div class="grid">
+      <div class="card"><h3>Portable</h3><p>No absolute paths. A sidecar checked into a repo works on any machine and any clone.</p></div>
+      <div class="card"><h3>Verifiable</h3><p>Content fingerprints (SHA-256, byte size) let a consumer detect that the source or PDF changed since mapping ran — without re-running the matcher.</p></div>
+      <div class="card"><h3>Layered</h3><p>Each item separates what came <em>from the PDF</em> (immutable), what the <em>matcher computed</em> (a cache), and what the <em>user owns</em> (review state).</p></div>
+      <div class="card"><h3>Evolvable</h3><p>A top-level integer <code>version</code> and a <code>$schema</code> URL, so consumers can branch on format and validate.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="top-level">
+  <div class="wrap">
+    <h2>Top-level shape</h2>
+    <p class="sub">A session is metadata + two file references + an array of items.</p>
+<pre><code><span class="tok-punc">{</span>
+  <span class="tok-key">"$schema"</span><span class="tok-punc">:</span> <span class="tok-str">"https://volland.github.io/eddie-doc/schema/review-v2.schema.json"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"version"</span><span class="tok-punc">:</span> <span class="tok-num">2</span><span class="tok-punc">,</span>
+  <span class="tok-key">"producer"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span> <span class="tok-key">"name"</span><span class="tok-punc">:</span> <span class="tok-str">"eddie-doc"</span><span class="tok-punc">,</span> <span class="tok-key">"version"</span><span class="tok-punc">:</span> <span class="tok-str">"0.1.5"</span> <span class="tok-punc">},</span>
+  <span class="tok-key">"createdAt"</span><span class="tok-punc">:</span> <span class="tok-str">"2026-07-03T07:15:17.937Z"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"updatedAt"</span><span class="tok-punc">:</span> <span class="tok-str">"2026-07-12T09:02:00.000Z"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"source"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span> <span class="tok-key">"path"</span><span class="tok-punc">:</span> <span class="tok-str">"chapter-01.adoc"</span><span class="tok-punc">,</span> <span class="tok-key">"sha256"</span><span class="tok-punc">:</span> <span class="tok-str">"…"</span><span class="tok-punc">,</span> <span class="tok-key">"bytes"</span><span class="tok-punc">:</span> <span class="tok-num">4213</span> <span class="tok-punc">},</span>
+  <span class="tok-key">"pdf"</span><span class="tok-punc">:</span>    <span class="tok-punc">{</span> <span class="tok-key">"path"</span><span class="tok-punc">:</span> <span class="tok-str">"chapter-01.annotated.pdf"</span><span class="tok-punc">,</span> <span class="tok-key">"sha256"</span><span class="tok-punc">:</span> <span class="tok-str">"…"</span><span class="tok-punc">,</span> <span class="tok-key">"annotationCount"</span><span class="tok-punc">:</span> <span class="tok-num">5</span> <span class="tok-punc">},</span>
+  <span class="tok-key">"items"</span><span class="tok-punc">:</span> <span class="tok-punc">[</span> <span class="tok-com">/* … */</span> <span class="tok-punc">]</span>
+<span class="tok-punc">}</span></code></pre>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>$schema</code></td><td class="req">–</td><td>Format identifier; also the canonical schema URL.</td></tr>
+        <tr><td><code>version</code></td><td class="req">✓</td><td>On-disk format version. <code>2</code> for this spec.</td></tr>
+        <tr><td><code>producer</code></td><td class="req">–</td><td>Tool that wrote the file (<code>name</code>, optional <code>version</code>).</td></tr>
+        <tr><td><code>createdAt</code> / <code>updatedAt</code></td><td class="req">✓</td><td>ISO-8601 timestamps.</td></tr>
+        <tr><td><code>source</code></td><td class="req">✓</td><td>The <code>.adoc</code> input — a file reference.</td></tr>
+        <tr><td><code>pdf</code></td><td class="req">✓</td><td>The annotated PDF input, plus <code>annotationCount</code>.</td></tr>
+        <tr><td><code>items</code></td><td class="req">✓</td><td>The review items.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>File references</h3>
+    <p>Both <code>source</code> and <code>pdf</code> are file references:</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>path</code></td><td>Relative to the <b>sidecar's own directory</b>, always with POSIX (<code>/</code>) separators, even on Windows.</td></tr>
+        <tr><td><code>sha256</code></td><td>Hex SHA-256 of the file's bytes at the time mapping last ran. Optional — a migrated v1 session has none until it re-maps.</td></tr>
+        <tr><td><code>bytes</code></td><td>Size at map time. <code>pdf</code> additionally carries <code>annotationCount</code>, a cheap staleness signal.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section id="items">
+  <div class="wrap">
+    <h2>Items</h2>
+    <p class="sub">Each item is a PDF annotation, its match into source, and its review state — in three separate blocks so they evolve and diff independently.</p>
+<pre><code><span class="tok-punc">{</span>
+  <span class="tok-key">"id"</span><span class="tok-punc">:</span> <span class="tok-str">"p2-highlight-48-719"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"annotation"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span>
+    <span class="tok-key">"kind"</span><span class="tok-punc">:</span> <span class="tok-str">"highlight"</span><span class="tok-punc">,</span>
+    <span class="tok-key">"author"</span><span class="tok-punc">:</span> <span class="tok-str">"Editor"</span><span class="tok-punc">,</span>
+    <span class="tok-key">"comment"</span><span class="tok-punc">:</span> <span class="tok-str">"Strong framing — keep this."</span><span class="tok-punc">,</span>
+    <span class="tok-key">"anchoredText"</span><span class="tok-punc">:</span> <span class="tok-str">"…relationships at the center of the model."</span><span class="tok-punc">,</span>
+    <span class="tok-key">"markedText"</span><span class="tok-punc">:</span> <span class="tok-str">"relationships at the center of the model"</span><span class="tok-punc">,</span>
+    <span class="tok-key">"geometry"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span> <span class="tok-key">"page"</span><span class="tok-punc">:</span> <span class="tok-num">2</span><span class="tok-punc">,</span> <span class="tok-key">"unit"</span><span class="tok-punc">:</span> <span class="tok-str">"pt"</span><span class="tok-punc">,</span> <span class="tok-key">"origin"</span><span class="tok-punc">:</span> <span class="tok-str">"bottom-left"</span><span class="tok-punc">,</span>
+                   <span class="tok-key">"rect"</span><span class="tok-punc">:</span> <span class="tok-punc">[</span><span class="tok-num">48.24</span><span class="tok-punc">,</span> <span class="tok-num">718.58</span><span class="tok-punc">,</span> <span class="tok-num">547.04</span><span class="tok-punc">,</span> <span class="tok-num">748.64</span><span class="tok-punc">]</span> <span class="tok-punc">}</span>
+  <span class="tok-punc">},</span>
+  <span class="tok-key">"match"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span> <span class="tok-key">"startLine"</span><span class="tok-punc">:</span> <span class="tok-num">6</span><span class="tok-punc">,</span> <span class="tok-key">"endLine"</span><span class="tok-punc">:</span> <span class="tok-num">7</span><span class="tok-punc">,</span> <span class="tok-key">"score"</span><span class="tok-punc">:</span> <span class="tok-num">0.887</span><span class="tok-punc">,</span> <span class="tok-key">"method"</span><span class="tok-punc">:</span> <span class="tok-str">"fuzzy"</span> <span class="tok-punc">},</span>
+  <span class="tok-key">"state"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span> <span class="tok-key">"resolved"</span><span class="tok-punc">:</span> <span class="tok-num">false</span> <span class="tok-punc">}</span>
+<span class="tok-punc">}</span></code></pre>
+
+    <h3><code>id</code></h3>
+    <p>A stable identifier that survives re-import so review state can be reattached. Producers <b>should</b> prefer the PDF's own annotation id (<code>NM</code>) when available, since geometry-derived ids change if the PDF is re-exported at a different position.</p>
+
+    <h3><code>annotation</code> — from the PDF (immutable)</h3>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>kind</code></td><td class="req">✓</td><td><code>highlight</code>, <code>strikeout</code>, <code>underline</code>, <code>comment</code>, <code>insert</code>, <code>replace</code>, <code>other</code>.</td></tr>
+        <tr><td><code>author</code></td><td class="req">–</td><td>Annotation author, if the PDF records it.</td></tr>
+        <tr><td><code>comment</code></td><td class="req">–</td><td>The editor's comment body.</td></tr>
+        <tr><td><code>anchoredText</code></td><td class="req">–</td><td>Text physically under the markup. Over-captures the whole line for robust matching.</td></tr>
+        <tr><td><code>markedText</code></td><td class="req">–</td><td>The tightly-bounded text inside the markup quads — used for character-precise delete/replace.</td></tr>
+        <tr><td><code>beforeText</code></td><td class="req">–</td><td>For <code>insert</code> (caret) marks: text left of the caret on the same line, to place the insertion at the exact offset.</td></tr>
+        <tr><td><code>geometry</code></td><td class="req">✓</td><td>Position in the PDF — <code>page</code> (1-based), <code>unit: "pt"</code>, <code>origin: "bottom-left"</code>, <code>rect: [x0,y0,x1,y1]</code>. Optional reserved <code>quadPoints</code>.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3><code>match</code> — computed (a cache, <code>null</code> when unmatched)</h3>
+    <p>The matcher's best mapping onto the source. It is <b>recomputable</b> — running <em>Re-map</em> rebuilds it — so a consumer must treat it as a cache, not ground truth.</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>startLine</code> / <code>endLine</code></td><td class="req">✓</td><td><b>0-based</b>, inclusive, line range in the source.</td></tr>
+        <tr><td><code>score</code></td><td class="req">✓</td><td>0–1 similarity of the matched span.</td></tr>
+        <tr><td><code>method</code></td><td class="req">–</td><td><code>"fuzzy"</code> (token/bigram) or <code>"semantic"</code> (embedding fallback).</td></tr>
+        <tr><td><code>sourceExcerpt</code></td><td class="req">–</td><td>A snapshot of the matched source text <b>for display/debug only</b>. Goes stale the moment the line is edited — never authoritative.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3><code>state</code> — user-owned (the only hand-edited block)</h3>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>resolved</code></td><td class="req">✓</td><td>The reviewer has handled this item.</td></tr>
+        <tr><td><code>confirmed</code></td><td class="req">–</td><td>The user vouched for the link (hand-picked, or accepted a low-confidence/semantic auto-match). Keeps it out of <em>Needs review</em>.</td></tr>
+        <tr><td><code>manualLine</code></td><td class="req">–</td><td><b>0-based</b> line the user manually linked to; <b>overrides</b> <code>match</code>.</td></tr>
+        <tr><td><code>note</code></td><td class="req">–</td><td>Free-form reviewer note.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>Line numbers are 0-based</b> throughout the format (<code>match.startLine</code>,
+      <code>state.manualLine</code>). Editors that display 1-based line numbers add 1 for presentation.
+      The <b>effective line</b> of an item is <code>manualLine</code> when set, otherwise
+      <code>match.startLine</code>, otherwise unmatched.
+    </div>
+  </div>
+</section>
+
+<section id="validate">
+  <div class="wrap">
+    <h2>Validate a sidecar</h2>
+    <p class="sub">Any JSON Schema (draft 2020-12) validator works.</p>
+<pre><code>npx ajv-cli validate --spec=draft2020 --strict=false \
+  -s schema/review-v2.schema.json -d path/to/chapter-01.review.json</code></pre>
+    <p>Or reference the published schema directly from your tooling at
+      <a href="schema/review-v2.schema.json"><code>https://volland.github.io/eddie-doc/schema/review-v2.schema.json</code></a>.</p>
+  </div>
+</section>
+
+<section id="compat">
+  <div class="wrap">
+    <h2>Compatibility &amp; migration</h2>
+    <ul>
+      <li><b>Reading:</b> a consumer branches on <code>version</code>. Eddie Doc reads both <code>1</code> and <code>2</code>. Unknown top-level fields are ignored, not rejected.</li>
+      <li><b>v1 → v2:</b> version 1 was a flat shape with absolute paths and item fields at the top level. Eddie Doc migrates it transparently on load; the <b>next write upgrades the file to v2</b>. No user action required.</li>
+      <li><b>Forward changes:</b> additive fields do not bump <code>version</code>. A breaking change bumps it to <code>3</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="w3c">
+  <div class="wrap">
+    <h2>Relationship to the W3C Web Annotation model</h2>
+    <p>
+      This format is intentionally close to the
+      <a href="https://www.w3.org/TR/annotation-model/">W3C Web Annotation Data Model</a>:
+      an item is an annotation whose <em>body</em> is <code>annotation.comment</code> and whose
+      <em>target</em> is the PDF (via <code>geometry</code>) plus the source (via <code>match</code>/<code>state</code>).
+      The mapping is mechanical — <code>anchoredText</code> → <code>TextQuoteSelector</code>,
+      <code>match.startLine</code> → <code>TextPositionSelector</code>,
+      <code>geometry</code> → a quad <code>FragmentSelector</code> — leaving a clean path to emit
+      standards-compliant JSON-LD in a future version without reworking the data captured here.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Eddie Doc Review Format v2</span>
+    <span class="spacer"></span>
+    <a href="index.html">Home</a>
+    <a href="schema/review-v2.schema.json">Schema</a>
+    <a href="https://github.com/Volland/eddie-doc">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>

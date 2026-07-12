@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://volland.github.io/eddie-doc/schema/review-v2.schema.json",
+  "title": "Eddie Doc Review Format",
+  "description": "Portable sidecar (<file>.review.json) mapping PDF review annotations back to AsciiDoc source. Version 2.",
+  "type": "object",
+  "required": ["version", "createdAt", "updatedAt", "source", "pdf", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Identifier of this format; the canonical URL is the $id above."
+    },
+    "version": {
+      "const": 2,
+      "description": "On-disk format version."
+    },
+    "producer": {
+      "type": "object",
+      "description": "Tool that wrote the file.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of first creation."
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the most recent write."
+    },
+    "source": {
+      "$ref": "#/$defs/fileRef",
+      "description": "The source .adoc, addressed relative to this sidecar."
+    },
+    "pdf": {
+      "allOf": [{ "$ref": "#/$defs/fileRef" }],
+      "description": "The annotated PDF, addressed relative to this sidecar.",
+      "properties": {
+        "path": true,
+        "sha256": true,
+        "bytes": true,
+        "annotationCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of annotations extracted from the PDF."
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "$defs": {
+    "fileRef": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path relative to the sidecar's directory, POSIX separators."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 (hex) of the file's bytes at map time."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "File size in bytes at map time."
+        }
+      }
+    },
+    "annotationKind": {
+      "type": "string",
+      "enum": [
+        "highlight",
+        "strikeout",
+        "underline",
+        "comment",
+        "insert",
+        "replace",
+        "other"
+      ]
+    },
+    "geometry": {
+      "type": "object",
+      "required": ["page", "unit", "origin", "rect"],
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based page number in the PDF."
+        },
+        "unit": {
+          "const": "pt",
+          "description": "Coordinate unit — PDF points."
+        },
+        "origin": {
+          "const": "bottom-left",
+          "description": "Origin corner of PDF user space."
+        },
+        "rect": {
+          "type": "array",
+          "description": "Bounding box [x0, y0, x1, y1].",
+          "items": { "type": "number" },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "quadPoints": {
+          "type": "array",
+          "description": "Optional per-line quad points, 8 numbers per quad.",
+          "items": { "type": "number" }
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "description": "Immutable, PDF-derived part of an item.",
+      "required": ["kind", "geometry"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/annotationKind" },
+        "author": { "type": "string" },
+        "comment": { "type": "string", "description": "Editor's comment body." },
+        "anchoredText": {
+          "type": "string",
+          "description": "Text physically under the markup (over-captures a line for matching)."
+        },
+        "markedText": {
+          "type": "string",
+          "description": "Tightly-bounded text inside the markup quads, for character-level edits."
+        },
+        "beforeText": {
+          "type": "string",
+          "description": "For caret/insert marks: text left of the caret on the same line."
+        },
+        "geometry": { "$ref": "#/$defs/geometry" }
+      }
+    },
+    "match": {
+      "type": ["object", "null"],
+      "description": "Recomputable mapping onto the source. A cache, not authoritative.",
+      "required": ["startLine", "endLine", "score"],
+      "additionalProperties": false,
+      "properties": {
+        "startLine": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based start line in the source."
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based end line (inclusive)."
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "0–1 similarity of the matched span."
+        },
+        "method": {
+          "type": "string",
+          "enum": ["fuzzy", "semantic"],
+          "description": "How the match was produced."
+        },
+        "sourceExcerpt": {
+          "type": "string",
+          "description": "Non-authoritative snapshot of matched source text, for display only."
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "description": "User-owned review state — the only part a human edits over time.",
+      "required": ["resolved"],
+      "additionalProperties": false,
+      "properties": {
+        "resolved": { "type": "boolean" },
+        "confirmed": {
+          "type": "boolean",
+          "description": "User has vouched for the link (hand-picked or accepted a weak match)."
+        },
+        "manualLine": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based line the user manually linked to; overrides match."
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "annotation", "match", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable id — the PDF annotation id when available, else page+geometry."
+        },
+        "annotation": { "$ref": "#/$defs/annotation" },
+        "match": { "$ref": "#/$defs/match" },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    }
+  }
+}
