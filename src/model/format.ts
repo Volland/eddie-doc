@@ -31,7 +31,7 @@ export const FORMAT_VERSION = 2 as const;
  * Producer stamp written into every sidecar. Keep the version in sync with
  * package.json (release.sh bumps both).
  */
-export const PRODUCER = { name: "eddie-doc", version: "0.1.5" } as const;
+export const PRODUCER = { name: "eddie-doc", version: "0.1.6" } as const;
 
 // ---------------------------------------------------------------------------
 // On-disk document shape (version 2)
