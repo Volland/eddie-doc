@@ -3,7 +3,7 @@
 All notable changes to **Eddie Doc — AsciiDoc PDF Review** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.8] — 2026-08-02
 
 ### Added
 - **Matching-quality benchmark** — `npm run bench` runs the real extraction +

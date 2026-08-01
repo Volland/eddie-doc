@@ -7,3 +7,4 @@ sample/*.review.json
 
 .omc/
 eddie-doc-*.vsix
+.DS_Store
