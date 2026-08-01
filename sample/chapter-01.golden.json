@@ -1,0 +1,12 @@
+{
+  "//": "Hand-verified expectations for the sample fixture. Keys identify annotations by the editor's comment; lines are 1-based inclusive regions in chapter-01.adoc the mapped span must overlap. See annotate.py for how the PDF was produced.",
+  "source": "chapter-01.adoc",
+  "pdf": "chapter-01.annotated.pdf",
+  "cases": [
+    { "key": "Strong framing — keep this.", "lines": [7, 8] },
+    { "key": "Delete: too advanced for an intro.", "lines": [11, 11] },
+    { "key": "Add a small diagram illustrating this edge.", "lines": [19, 20] },
+    { "key": "Reword: 'trust or lineage'.", "lines": [26, 28] },
+    { "key": "Cut — repeats the intro.", "lines": [35, 35] }
+  ]
+}
