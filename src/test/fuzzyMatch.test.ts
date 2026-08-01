@@ -76,6 +76,92 @@ describe("matchAnchor", () => {
   });
 });
 
+describe("comment exclusion", () => {
+  const src = buildSourceIndex(
+    [
+      "Real prose about the data model.", // 0
+      "", // 1
+      "////", // 2
+      "An entity is any distinct thing we wish to describe.", // 3
+      "////", // 4
+      "// An entity is any distinct thing we wish to describe.", // 5
+      "", // 6
+      "An entity is any distinct thing we wish to describe.", // 7
+    ].join("\n")
+  );
+
+  it("matches the prose copy, never the identical comment copies", () => {
+    const m = matchAnchor(
+      "An entity is any distinct thing we wish to describe",
+      src
+    );
+    assert.ok(m, "expected a match");
+    assert.strictEqual(m!.startLine, 7);
+    assert.strictEqual(m!.endLine, 7);
+  });
+
+  it("finds nothing when the text exists only inside a comment block", () => {
+    const hidden = buildSourceIndex(
+      ["////", "only in a comment secret phrase", "////"].join("\n")
+    );
+    assert.strictEqual(
+      matchAnchor("only in a comment secret phrase", hidden),
+      null
+    );
+  });
+
+  it("offers no comment lines as triage candidates", () => {
+    const cands = topMatches("An entity is any distinct thing", src, 10);
+    assert.ok(cands.length > 0);
+    for (const c of cands) {
+      assert.ok(
+        c.startLine !== 3 && c.startLine !== 5,
+        `comment line ${c.startLine} offered as candidate`
+      );
+    }
+  });
+});
+
+describe("rarity weighting", () => {
+  it("prefers one distinctive word over a pile of shared stopwords", () => {
+    const src = buildSourceIndex(
+      [
+        "it is a of the and to in on for", // 0 — stopword soup
+        "it is a of the and to in on for", // 1
+        "it is a of the and to in on for", // 2
+        "completely different filler words about gardens and weather", // 3
+        "hypergraph", // 4
+      ].join("\n")
+    );
+    // Unweighted overlap would land on a stopword line ("of the" scores 0.8
+    // there); the rare word must dominate instead.
+    const m = matchAnchor("hypergraph of the", src);
+    assert.ok(m, "expected a match");
+    assert.strictEqual(m!.startLine, 4);
+  });
+});
+
+describe("PDF word-split repair", () => {
+  const src = buildSourceIndex(
+    "A knowledge graph stores facts as connected entities."
+  );
+
+  it("re-joins a word the PDF broke across a line wrap", () => {
+    const m = matchAnchor("knowl edge graph stores facts", src);
+    assert.ok(m, "expected a match");
+    assert.strictEqual(m!.startLine, 0);
+    assert.ok(m!.score > 0.8, `score ${m!.score}`);
+  });
+
+  it("leaves legitimate adjacent words alone", () => {
+    // "graph" and "stores" are both source words; they must not be merged even
+    // though no "graphstores" token would match anything.
+    const m = matchAnchor("graph stores facts", src);
+    assert.ok(m, "expected a match");
+    assert.ok(m!.score > 0.6, `score ${m!.score}`);
+  });
+});
+
 describe("topMatches", () => {
   const idx = buildSourceIndex(SOURCE);
 

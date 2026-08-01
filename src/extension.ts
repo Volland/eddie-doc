@@ -20,6 +20,7 @@ import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
 import { extractAnnotations } from "./pdf/extract.js";
 import { annotationsToAdoc, extractedAdocPath } from "./pdf/toAdoc.js";
 import { PdfPreviewPanel } from "./ui/pdfPreview.js";
+import { isSessionStale, renderReport } from "./model/report.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 
@@ -49,6 +50,10 @@ function resolveTargetAdoc(store: ReviewStore): string | undefined {
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new ReviewStore();
+  // Embeddings for the semantic fallback survive restarts in global storage.
+  store.useEmbedCacheFile(
+    path.join(context.globalStorageUri.fsPath, "embed-cache.json")
+  );
   const decorations = new DecorationManager(store);
   const diagnostics = new DiagnosticsManager(store);
   const preview = new PdfPreviewPanel(context.extensionUri);
@@ -358,7 +363,37 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand("eddieDoc.prevAnnotation", () =>
       jump(store, -1)
-    )
+    ),
+
+    // Write the session as a Markdown report next to the sidecar — the
+    // artifact an author sends back to the editor after a review pass.
+    vscode.commands.registerCommand("eddieDoc.exportReport", async () => {
+      const adocPath = resolveTargetAdoc(store);
+      const session = adocPath ? store.get(adocPath) : undefined;
+      if (!adocPath || !session) {
+        vscode.window.showInformationMessage(
+          "Eddie Doc: no review loaded to export."
+        );
+        return;
+      }
+      const cfg = vscode.workspace.getConfiguration("eddieDoc");
+      const md = renderReport(session, {
+        highConfidence: cfg.get<number>("highConfidence", 0.75),
+        stale: isSessionStale(session),
+        generatedAt: new Date().toISOString(),
+      });
+      const outPath = adocPath.replace(/\.adoc$/i, "") + ".review.md";
+      try {
+        fs.writeFileSync(outPath, md, "utf8");
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `Eddie Doc: could not write report — ${String(e)}`
+        );
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument(outPath);
+      await vscode.window.showTextDocument(doc, { preview: true });
+    })
   );
 
   context.subscriptions.push(

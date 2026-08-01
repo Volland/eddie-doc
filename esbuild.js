@@ -44,6 +44,7 @@ async function main() {
   const entries = [
     { entry: "src/extension.ts", outfile: "dist/extension.js", external: ["vscode"] },
     { entry: "src/cli.ts", outfile: "dist/cli.js", external: [] },
+    { entry: "src/benchmark/main.ts", outfile: "dist/bench.js", external: [] },
   ].filter((e) => fs.existsSync(path.join(__dirname, e.entry)));
 
   const contexts = await Promise.all(

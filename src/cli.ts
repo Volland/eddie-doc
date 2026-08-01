@@ -1,27 +1,47 @@
 /**
  * Standalone harness to validate PDF extraction + source mapping without VS
- * Code. Usage: node dist/cli.js <annotated.pdf> <source.adoc> [--json]
+ * Code. Usage: node dist/cli.js <annotated.pdf> <source.adoc> [--json] [--report] [--lexical]
  */
 import { readFileSync } from "node:fs";
 import { extractAnnotations } from "./pdf/extract.js";
 import { mapAnnotations, effectiveLine } from "./matching/mapper.js";
+import { lexicalFallback } from "./matching/lexical.js";
+import { renderReport } from "./model/report.js";
 import { KIND_LABEL } from "./model/types.js";
 
 async function main() {
   const [pdfPath, adocPath, ...rest] = process.argv.slice(2);
   if (!pdfPath || !adocPath) {
-    console.error("usage: cli <annotated.pdf> <source.adoc> [--json]");
+    console.error(
+      "usage: cli <annotated.pdf> <source.adoc> [--json] [--report] [--lexical]"
+    );
     process.exit(2);
   }
   const asJson = rest.includes("--json");
+  const asReport = rest.includes("--report");
   const data = new Uint8Array(readFileSync(pdfPath));
   const source = readFileSync(adocPath, "utf8");
 
   const annots = await extractAnnotations(data);
   const items = mapAnnotations(annots, source, { threshold: 0.5 });
+  if (rest.includes("--lexical")) lexicalFallback(items, source, 0.6);
 
   if (asJson) {
     console.log(JSON.stringify(items, null, 2));
+    return;
+  }
+  if (asReport) {
+    const now = new Date().toISOString();
+    console.log(
+      renderReport({
+        version: 2,
+        adocPath,
+        pdfPath,
+        createdAt: now,
+        updatedAt: now,
+        items,
+      })
+    );
     return;
   }
 

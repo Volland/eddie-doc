@@ -115,6 +115,11 @@
         "command": "eddieDoc.previewAnnotation",
         "title": "Eddie Doc: Preview in PDF",
         "icon": "$(file-media)"
+      },
+      {
+        "command": "eddieDoc.exportReport",
+        "title": "Eddie Doc: Export Review Report",
+        "icon": "$(book)"
       }
     ],
     "viewsContainers": {
@@ -167,6 +172,11 @@
           "command": "eddieDoc.triageUnmatched",
           "when": "view == eddieDoc.annotations",
           "group": "navigation@4"
+        },
+        {
+          "command": "eddieDoc.exportReport",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -323,6 +333,18 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Minimum cosine similarity (0-1) for the semantic fallback to link an annotation to a source paragraph."
+        },
+        "eddieDoc.lexicalFallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "For annotations the token matcher can't place, fall back to a built-in character-trigram similarity over source paragraphs. Runs locally, no setup; rescued links land in 'Needs review'."
+        },
+        "eddieDoc.lexicalThreshold": {
+          "type": "number",
+          "default": 0.6,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum trigram-containment score (0-1) for the lexical fallback to link an annotation to a source paragraph."
         }
       }
     }
@@ -335,7 +357,8 @@
     "typecheck": "tsc --noEmit -p .",
     "pretest": "npm run compile-tests",
     "test": "mocha \"out/test/**/*.test.js\"",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "bench": "npm run build && node dist/bench.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",

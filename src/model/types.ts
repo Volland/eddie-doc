@@ -48,8 +48,9 @@ export interface Match {
   score: number;
   /** The source text span that matched (for display / debugging). */
   sourceExcerpt: string;
-  /** How the match was produced: token fuzzy match or semantic embedding. */
-  method?: "fuzzy" | "semantic";
+  /** How the match was produced: token fuzzy match, semantic embedding, or
+   *  character-trigram lexical fallback. */
+  method?: "fuzzy" | "semantic" | "lexical";
 }
 
 /** A fully-resolved review item: annotation + where it lives in source + state. */

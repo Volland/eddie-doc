@@ -155,7 +155,7 @@ function locationLabel(item: ReviewItem, line: number): string {
   else if (item.match) {
     const m = item.match;
     parts.push(
-      `${m.method === "semantic" ? "semantic " : ""}${m.score.toFixed(2)}`
+      `${m.method && m.method !== "fuzzy" ? `${m.method} ` : ""}${m.score.toFixed(2)}`
     );
   }
   return parts.join(" · ");

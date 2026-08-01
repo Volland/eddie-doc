@@ -8,10 +8,16 @@ import type {
 } from "./types.js";
 import { parse, serialize, sha256 } from "./format.js";
 import { extractAnnotations } from "../pdf/extract.js";
-import { mapAnnotations, matchOne } from "../matching/mapper.js";
+import { mapAnnotations, matchOne, type MapStats } from "../matching/mapper.js";
 import { buildSourceIndex } from "../matching/fuzzyMatch.js";
+import { lexicalFallback } from "../matching/lexical.js";
 import { shiftLine, type ContentChange } from "../matching/posTrack.js";
-import { semanticFallback } from "../matching/semantic.js";
+import {
+  FileEmbedCache,
+  MemoryEmbedCache,
+  semanticFallback,
+  type EmbedCache,
+} from "../matching/semantic.js";
 
 /** Strip the review-state fields, leaving the raw annotation to re-map. */
 function toRaw(it: ReviewItem): RawAnnotation {
@@ -41,6 +47,13 @@ export class ReviewStore {
   readonly onDidChange = this._onDidChange.event;
   /** Only nag once per session if the semantic backend is unreachable. */
   private semanticWarned = false;
+  /** Embedding memo shared across maps; upgraded to a file cache on activate. */
+  private embedCache: EmbedCache = new MemoryEmbedCache();
+
+  /** Persist embeddings under `file` so re-maps across restarts skip Ollama. */
+  useEmbedCacheFile(file: string): void {
+    this.embedCache = new FileEmbedCache(file);
+  }
 
   get(adocPath: string): ReviewSession | undefined {
     return this.sessions.get(adocPath);
@@ -78,8 +91,17 @@ export class ReviewStore {
     const source = sourceBytes.toString("utf8");
     const annots = await extractAnnotations(bytes);
     const prev = this.sessions.get(adocPath)?.items;
-    const items = mapAnnotations(annots, source, { threshold }, prev);
-    await this.runSemantic(items, source);
+    const stats: MapStats = { carried: 0 };
+    const items = mapAnnotations(annots, source, { threshold }, prev, stats);
+    await this.runFallbacks(items, source);
+    if (stats.carried > 0) {
+      // A re-exported PDF re-keys every annotation id; content fingerprints
+      // just rescued that state, and the user should know it survived.
+      vscode.window.showInformationMessage(
+        `Eddie Doc: carried review state for ${stats.carried} annotation(s) ` +
+          `from the previous PDF round.`
+      );
+    }
 
     const now = new Date().toISOString();
     const session: ReviewSession = {
@@ -114,7 +136,7 @@ export class ReviewStore {
     const source = sourceBytes.toString("utf8");
     const raw = session.items.map(toRaw);
     const items = mapAnnotations(raw, source, { threshold }, session.items);
-    await this.runSemantic(items, source);
+    await this.runFallbacks(items, source);
     session.items = items;
     session.version = 2;
     session.updatedAt = new Date().toISOString();
@@ -127,23 +149,36 @@ export class ReviewStore {
     this._onDidChange.fire(adocPath);
   }
 
-  /** Apply the optional embedding-based fallback when the user has enabled it. */
-  private async runSemantic(
+  /**
+   * Rescue tiers for items the token matcher couldn't place: embeddings first
+   * (highest quality, opt-in, needs Ollama), then the built-in character-
+   * trigram lexical tier for whatever is still unmatched.
+   */
+  private async runFallbacks(
     items: ReviewItem[],
     source: string
   ): Promise<void> {
     const cfg = vscode.workspace.getConfiguration("eddieDoc");
-    if (!cfg.get<boolean>("semanticFallback", false)) return;
-    const url = cfg.get<string>("ollamaUrl", "http://localhost:11434");
-    const model = cfg.get<string>("embedModel", "embeddinggemma");
-    const threshold = cfg.get<number>("semanticThreshold", 0.62);
-    const res = await semanticFallback(items, source, { url, model, threshold });
-    if (!res.ok && !this.semanticWarned) {
-      this.semanticWarned = true;
-      vscode.window.showWarningMessage(
-        `Eddie Doc: semantic fallback couldn't reach Ollama at ${url}. ` +
-          `Start Ollama (with the '${model}' model pulled) or disable eddieDoc.semanticFallback.`
-      );
+    if (cfg.get<boolean>("semanticFallback", false)) {
+      const url = cfg.get<string>("ollamaUrl", "http://localhost:11434");
+      const model = cfg.get<string>("embedModel", "embeddinggemma");
+      const threshold = cfg.get<number>("semanticThreshold", 0.62);
+      const res = await semanticFallback(items, source, {
+        url,
+        model,
+        threshold,
+        cache: this.embedCache,
+      });
+      if (!res.ok && !this.semanticWarned) {
+        this.semanticWarned = true;
+        vscode.window.showWarningMessage(
+          `Eddie Doc: semantic fallback couldn't reach Ollama at ${url}. ` +
+            `Start Ollama (with the '${model}' model pulled) or disable eddieDoc.semanticFallback.`
+        );
+      }
+    }
+    if (cfg.get<boolean>("lexicalFallback", true)) {
+      lexicalFallback(items, source, cfg.get<number>("lexicalThreshold", 0.6));
     }
   }
 

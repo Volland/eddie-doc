@@ -3,6 +3,36 @@
 All notable changes to **Eddie Doc — AsciiDoc PDF Review** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Matching-quality benchmark** — `npm run bench` runs the real extraction +
+  mapping pipeline over hand-verified golden corpora (`sample/*.golden.json`)
+  and gates on the result, so matcher changes are measured, not eyeballed.
+- **Export Review Report** — a command (and `dist/cli.js … --report`) that
+  renders the session as a Markdown report (`<file>.review.md`) grouped into
+  Open / Needs review / Unmatched / Resolved — the artifact you send back to
+  your editor, with a staleness warning when inputs changed since mapping.
+- **Second-round carry-over** — opening a re-exported PDF (which re-keys every
+  annotation id) now carries resolved state, notes and manual links over by
+  content fingerprint, so a new review round doesn't reset your progress.
+- **Lexical fallback tier** (`eddieDoc.lexicalFallback`, on by default) —
+  unmatched annotations get a second chance via character-trigram similarity
+  against source paragraphs: catches inflected/typo'd wording with zero setup,
+  no Ollama required. Tunable via `eddieDoc.lexicalThreshold`.
+
+### Changed
+- The semantic (Ollama) fallback now batches embeddings through `/api/embed`
+  (with a legacy per-input fallback) and memoizes vectors in a persistent
+  content-addressed cache, making re-maps near-instant instead of one HTTP
+  round-trip per paragraph.
+
+### Fixed
+- Sticky notes parked in the page margin could anchor to a line in the wrong
+  paragraph: nearest-line search now measures distance to each text run's
+  rectangle (vertically weighted) instead of its centre. Caught by the new
+  benchmark.
+
 ## [0.1.6] — 2026-07-12
 
 ### Added

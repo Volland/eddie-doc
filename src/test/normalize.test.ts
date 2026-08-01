@@ -4,6 +4,7 @@ import {
   tokenize,
   tokenizeSourceLine,
   isStructuralLine,
+  commentLineFlags,
 } from "../matching/normalize.js";
 
 describe("normalize", () => {
@@ -38,6 +39,32 @@ describe("normalize", () => {
     assert.ok(isStructuralLine("// a comment"));
     assert.ok(isStructuralLine("include::chapter.adoc[]"));
     assert.ok(!isStructuralLine("A knowledge graph is a structure."));
+  });
+
+  it("flags line comments and whole //// blocks, including their prose", () => {
+    const lines = [
+      "Real prose.", // 0
+      "// a line comment", // 1
+      "////", // 2
+      "Hidden prose inside a comment block.", // 3
+      "////", // 4
+      "More real prose.", // 5
+    ];
+    assert.deepStrictEqual(commentLineFlags(lines), [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("treats an unterminated comment block as running to the end", () => {
+    assert.deepStrictEqual(
+      commentLineFlags(["ok", "////", "hidden", "also hidden"]),
+      [false, true, true, true]
+    );
   });
 
   it("removes prose-leading markers from source lines", () => {

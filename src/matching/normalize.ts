@@ -34,6 +34,28 @@ export function isStructuralLine(line: string): boolean {
   return false;
 }
 
+/**
+ * Per-line comment flags for a whole document: `//` line comments, `////`
+ * block-comment delimiters, and every line inside a `////` block. Comment text
+ * never reaches the rendered PDF, so flagged lines must never be match
+ * targets. Block comments need this stateful pass — the per-line
+ * {@link isStructuralLine} cannot know it is standing inside one.
+ */
+export function commentLineFlags(rawLines: string[]): boolean[] {
+  const flags: boolean[] = new Array(rawLines.length).fill(false);
+  let inBlock = false;
+  for (let i = 0; i < rawLines.length; i++) {
+    const t = rawLines[i].trim();
+    if (/^\/{4,}$/.test(t)) {
+      flags[i] = true;
+      inBlock = !inBlock;
+      continue;
+    }
+    flags[i] = inBlock || t.startsWith("//");
+  }
+  return flags;
+}
+
 /** Strip a leading AsciiDoc block/prose marker, returning the prose remainder. */
 function stripLeadMarkers(line: string): string {
   return line

@@ -79,6 +79,92 @@ describe("mapAnnotations", () => {
     assert.strictEqual(effectiveLine(items[0]), 2);
   });
 
+  it("carries state to a re-keyed annotation by content fingerprint", () => {
+    // Second review round: the editor re-exports the PDF, so every id (derived
+    // from page + geometry) changes, but the remark content is identical.
+    const prev: ReviewItem[] = [
+      {
+        ...ann("old-geometry", {
+          anchoredText: "Reification lets us make statements about statements",
+          comment: "Tighten this.",
+          author: "Editor",
+        }),
+        match: null,
+        resolved: true,
+        note: "done in draft 2",
+      },
+    ];
+    const stats = { carried: 0 };
+    const items = mapAnnotations(
+      [
+        ann("new-geometry", {
+          // Same words modulo whitespace/punctuation — fingerprints match.
+          anchoredText: "Reification lets us  make statements about statements.",
+          comment: "Tighten this.",
+          author: "Editor",
+        }),
+      ],
+      SOURCE,
+      { threshold: 0.55 },
+      prev,
+      stats
+    );
+    assert.strictEqual(stats.carried, 1);
+    assert.strictEqual(items[0].resolved, true);
+    assert.strictEqual(items[0].note, "done in draft 2");
+  });
+
+  it("does not fingerprint-carry when content differs or ids still match", () => {
+    const prev: ReviewItem[] = [
+      {
+        ...ann("a", { comment: "Tighten this.", anchoredText: "some words" }),
+        match: null,
+        resolved: true,
+      },
+    ];
+    const stats = { carried: 0 };
+    // Same id → carried by id, not counted as a fingerprint carry.
+    const byId = mapAnnotations(
+      [ann("a", { comment: "Tighten this.", anchoredText: "some words" })],
+      SOURCE,
+      { threshold: 0.55 },
+      prev,
+      stats
+    );
+    assert.strictEqual(byId[0].resolved, true);
+    assert.strictEqual(stats.carried, 0);
+
+    // New id AND different words → nothing to inherit.
+    const different = mapAnnotations(
+      [ann("b", { comment: "A brand new remark.", anchoredText: "other words" })],
+      SOURCE,
+      { threshold: 0.55 },
+      prev,
+      stats
+    );
+    assert.strictEqual(different[0].resolved, false);
+    assert.strictEqual(stats.carried, 0);
+  });
+
+  it("pairs duplicate identical remarks one-to-one in document order", () => {
+    const dup = (id: string, note: string): ReviewItem => ({
+      ...ann(id, { comment: "Fix punctuation." }),
+      match: null,
+      resolved: false,
+      note,
+    });
+    const items = mapAnnotations(
+      [ann("n1", { comment: "Fix punctuation." }), ann("n2", { comment: "Fix punctuation." })],
+      SOURCE,
+      { threshold: 0.55 },
+      [dup("o1", "first"), dup("o2", "second")]
+    );
+    assert.deepStrictEqual(
+      items.map((i) => i.note),
+      ["first", "second"]
+    );
+  });
+
   it("sorts matched items by source line, unmatched last", () => {
     const items = mapAnnotations(
       [

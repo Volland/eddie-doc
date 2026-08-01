@@ -198,12 +198,16 @@ function textBefore(point: Box, texts: PositionedText[]): string {
 function nearestText(box: Box, texts: PositionedText[]): string {
   const cx = (box.x0 + box.x1) / 2;
   const cy = (box.y0 + box.y1) / 2;
+  // Measure to each run's rectangle, not its centre — a full-width run's
+  // centre sits half a page away from an icon parked in the margin beside it.
+  // Weight the vertical gap up: an icon lives next to its line, so being one
+  // line off matters far more than being at the line's far end.
   let best: PositionedText | null = null;
   let bestD = Infinity;
   for (const t of texts) {
-    const tx = (t.box.x0 + t.box.x1) / 2;
-    const ty = (t.box.y0 + t.box.y1) / 2;
-    const d = Math.hypot(tx - cx, ty - cy);
+    const dx = Math.max(t.box.x0 - cx, 0, cx - t.box.x1);
+    const dy = Math.max(t.box.y0 - cy, 0, cy - t.box.y1);
+    const d = Math.hypot(dx, 3 * dy);
     if (d < bestD) {
       bestD = d;
       best = t;

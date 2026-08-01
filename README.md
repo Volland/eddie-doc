@@ -68,13 +68,19 @@ you've handled.
 | `Eddie Doc: Toggle Resolved` | Mark an item done / open |
 | `Eddie Doc: Re-link to Current Cursor Line` | Override the match for an item |
 | `Eddie Doc: Triage Unmatched Annotations` | Walk every unmatched item, each with a ranked shortlist of candidate lines, and link or skip in one pass |
+| `Eddie Doc: Export Review Report` | Write the session as a Markdown report (`<file>.review.md`) to send back to your editor |
 
 ### Settings
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `eddieDoc.matchThreshold` | `0.55` | Minimum similarity (0–1) to auto-link; below this an item is *Unmatched*. |
+| `eddieDoc.matchThreshold` | `0.5` | Minimum similarity (0–1) to auto-link; below this an item is *Unmatched*. |
+| `eddieDoc.highConfidence` | `0.75` | Score at/above which a link is trusted; below it the item lands in *Needs review*. |
 | `eddieDoc.showResolved` | `true` | Show resolved items in the tree and as decorations. |
+| `eddieDoc.lexicalFallback` | `true` | Rescue unmatched items via built-in character-trigram similarity (no setup needed). |
+| `eddieDoc.lexicalThreshold` | `0.6` | Minimum trigram-containment score for a lexical rescue. |
+| `eddieDoc.semanticFallback` | `false` | Rescue unmatched items via a local embedding model served by Ollama. |
+| `eddieDoc.ollamaUrl` / `eddieDoc.embedModel` / `eddieDoc.semanticThreshold` | — | Where and how the semantic fallback embeds. |
 
 ## How mapping works
 
@@ -90,6 +96,29 @@ span above the threshold wins.
 Because it's fuzzy, mapping is robust to the source and PDF not being
 character-identical, but it isn't infallible: low-confidence matches surface as
 *Unmatched* for a one-click manual re-link rather than guessing.
+
+Items the token matcher can't place get two rescue tiers before landing in
+*Unmatched*, both marking their results for the *Needs review* group rather
+than silently trusting them:
+
+1. **Semantic** (opt-in): embed source paragraphs and the anchor with a local
+   Ollama model and link by cosine similarity — catches paraphrased remarks.
+   Embeddings are batched and cached, so re-maps don't re-embed.
+2. **Lexical** (on by default, zero setup): character-trigram similarity
+   against source paragraphs — catches inflected, hyphen-mangled, or typo'd
+   wording that token overlap misses.
+
+## Reports and second review rounds
+
+**Export Review Report** writes `<file>.review.md` — the session grouped into
+Open / Needs review / Unmatched / Resolved with comments, line numbers and
+notes — ready to send back to your editor (also available headless via
+`node dist/cli.js book.pdf book.adoc --report`).
+
+When the editor returns a *new* annotated PDF for the next round, just open it:
+annotation ids change with every re-export, but Eddie Doc fingerprints each
+annotation's content (kind, author, comment, marked text) and carries your
+resolved state, notes and manual links over to the matching annotations.
 
 ## The review sidecar (`.review.json`)
 
@@ -116,10 +145,11 @@ Version 1 sidecars are migrated to version 2 transparently on first write.
 npm install
 npm run build          # bundle with esbuild -> dist/
 npm run typecheck      # tsc --noEmit
-npm test               # mocha: normalize / fuzzyMatch / mapper
+npm test               # mocha unit tests
+npm run bench          # matching-quality gate against sample/*.golden.json
 
 # Prove extraction + mapping outside VS Code:
-node dist/cli.js <annotated.pdf> <source.adoc>
+node dist/cli.js <annotated.pdf> <source.adoc> [--json|--report] [--lexical]
 
 # Regenerate the sample fixture (needs asciidoctor-pdf + python3 PyMuPDF):
 asciidoctor-pdf -o sample/chapter-01.pdf sample/chapter-01.adoc
@@ -137,9 +167,13 @@ src/
   matching/normalize.ts AsciiDoc-aware text normalization
   matching/fuzzyMatch.ts sliding-window similarity → source line span
   matching/align.ts     stripped text → exact raw char offsets (precise edits)
-  matching/mapper.ts    annotations + source → review items
+  matching/mapper.ts    annotations + source → review items (+ round carry-over)
+  matching/lexical.ts   char-trigram rescue tier for unmatched items
+  matching/semantic.ts  optional Ollama-embedding rescue tier (batched, cached)
   model/types.ts        domain model
   model/store.ts        sessions + diffable sidecar persistence
+  model/report.ts       Markdown review-report renderer
+  benchmark/            golden-corpus matching-quality gate (npm run bench)
   ui/treeProvider.ts    activity-bar tree
   ui/decorations.ts     inline line markers + hovers
   ui/diagnostics.ts     Problems-panel entries

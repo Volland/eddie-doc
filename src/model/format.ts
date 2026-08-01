@@ -93,7 +93,7 @@ export interface MatchDoc {
   /** 0–1 similarity of the matched span. */
   score: number;
   /** How the match was produced. */
-  method?: "fuzzy" | "semantic";
+  method?: "fuzzy" | "semantic" | "lexical";
   /** Non-authoritative snapshot of the matched source text, for display only. */
   sourceExcerpt?: string;
 }
