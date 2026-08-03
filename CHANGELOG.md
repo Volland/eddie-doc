@@ -3,6 +3,29 @@
 All notable changes to **Eddie Doc — AsciiDoc PDF Review** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] — 2026-08-03
+
+Fixes driven by the first real-world publisher review round (a Manning
+chapter PDF): 26 extracted "annotations" became 17 real ones, and 13–16 of 17
+now map (vs 8 of 26 before).
+
+### Fixed
+- **Hyperlinks are no longer review items** — `Link` (and `Widget`) PDF
+  annotations, e.g. asciidoctor-pdf cross-references, were extracted as junk
+  "Note" items with no comment. A typical chapter carried 9 of them.
+- **Running headers/footers no longer pollute anchors** — repeated page
+  furniture ("22 Memory Systems for AI Agents", bare page numbers) is detected
+  across pages and stripped before anchoring, so sticky notes near the page
+  edge anchor to real prose instead of the title line.
+
+### Added
+- **Wrong-pair guard** — picking a PDF whose name matches a *different*
+  workspace `.adoc` (e.g. CH03 PDF while CH02.adoc is open) now offers to bind
+  the review to the matching source; after mapping, a mostly-unmatched result
+  (< 40 %) warns that the PDF may belong to another file.
+- Opening a review now brings the reviewed `.adoc` into the editor, so the
+  sidebar, decorations and preview always show the session just mapped.
+
 ## [0.1.8] — 2026-08-02
 
 ### Added

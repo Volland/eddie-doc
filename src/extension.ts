@@ -189,7 +189,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("eddieDoc.openReview", async (arg?: vscode.Uri) => {
-      const pair = await resolveReviewPair(store, arg);
+      let pair = await resolveReviewPair(store, arg);
+      if (!pair) return;
+      pair = await confirmPairSanity(pair);
       if (!pair) return;
       const { adocPath, pdfPath } = pair;
 
@@ -211,6 +213,26 @@ export function activate(context: vscode.ExtensionContext): void {
             vscode.window.showInformationMessage(
               `Eddie Doc: ${session.items.length} annotation(s), ${matched} mapped to source.`
             );
+            // A mostly-unmatched review usually means the PDF belongs to a
+            // different source file — say so instead of leaving a dead tree.
+            if (
+              session.items.length >= 5 &&
+              matched / session.items.length < 0.4
+            ) {
+              vscode.window.showWarningMessage(
+                `Eddie Doc: only ${matched} of ${session.items.length} annotations mapped. ` +
+                  `Check that "${path.basename(pdfPath)}" is really the annotated PDF for ` +
+                  `"${path.basename(adocPath)}", then use Triage for the rest.`
+              );
+            }
+            // Bind the whole UI to the reviewed source (it may differ from the
+            // active editor when the pair was re-bound or launched from a PDF).
+            if (activeAdocPath() !== adocPath) {
+              await vscode.window.showTextDocument(
+                vscode.Uri.file(adocPath),
+                { preview: false }
+              );
+            }
             await vscode.commands.executeCommand(
               "eddieDoc.annotations.focus"
             );
@@ -454,6 +476,65 @@ async function resolveReviewPair(
   const pdfPath = await pickPdf(adocPath);
   if (!pdfPath) return undefined;
   return { adocPath, pdfPath };
+}
+
+/** Filename stem used to compare a PDF against candidate .adoc sources. */
+function pairStem(file: string): string {
+  return path
+    .basename(file)
+    .replace(/(\.annotated)?\.pdf$/i, "")
+    .replace(/\.(adoc|asciidoc)$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Catch the classic mistake of picking another chapter's PDF: when the chosen
+ * PDF's name disagrees with the .adoc but exactly matches a different source
+ * file in the workspace, offer to bind the review to that file instead.
+ * Returns the (possibly re-bound) pair, or undefined if the user backs out.
+ */
+async function confirmPairSanity(
+  pair: ReviewPair
+): Promise<ReviewPair | undefined> {
+  const pdfStem = pairStem(pair.pdfPath);
+  const adocStem = pairStem(pair.adocPath);
+  if (
+    !pdfStem ||
+    !adocStem ||
+    pdfStem.includes(adocStem) ||
+    adocStem.includes(pdfStem)
+  ) {
+    return pair;
+  }
+
+  let better: string | undefined;
+  try {
+    const hits = await vscode.workspace.findFiles(
+      "**/*.{adoc,asciidoc}",
+      "**/node_modules/**"
+    );
+    const exact = hits.filter((u) => pairStem(u.fsPath) === pdfStem);
+    if (exact.length === 1) better = exact[0].fsPath;
+  } catch {
+    /* no workspace — nothing to suggest */
+  }
+  if (!better || better === pair.adocPath) return pair;
+
+  const useBetter = `Use ${path.basename(better)}`;
+  const keep = `Keep ${path.basename(pair.adocPath)}`;
+  const choice = await vscode.window.showWarningMessage(
+    `"${path.basename(pair.pdfPath)}" looks like the PDF for ` +
+      `"${path.basename(better)}", not "${path.basename(pair.adocPath)}". ` +
+      `Map its annotations onto which source?`,
+    { modal: true },
+    useBetter,
+    keep
+  );
+  if (!choice) return undefined;
+  return choice === useBetter
+    ? { adocPath: better, pdfPath: pair.pdfPath }
+    : pair;
 }
 
 /**

@@ -247,6 +247,77 @@ function stableId(kind: string, page: number, box: Box): string {
   return `p${page}-${kind}-${Math.round(box.x0)}-${Math.round(box.y0)}`;
 }
 
+/** One page's annotations + positioned text, gathered before processing. */
+interface PageData {
+  p: number;
+  annots: PdfAnnotation[];
+  texts: PositionedText[];
+  /** Page height in PDF points, for edge-band furniture detection. */
+  height: number;
+}
+
+/** Signature of a rendered line for repeated-furniture detection: digits are
+ *  wildcarded so "22 Memory Systems…" and "23 Memory Systems…" collide. */
+function lineSignature(str: string): string {
+  return str.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Remove page furniture — running headers/footers and bare page numbers —
+ * from every page's positioned text, in place. Publisher PDFs repeat a title
+ * line and a page number on each page; left in, they pollute anchors (a sticky
+ * near the top of a page anchors to "22 Memory Systems for AI Agents") and
+ * drag matching toward the document title line.
+ */
+function stripPageFurniture(pages: PageData[]): void {
+  const EDGE = 0.12; // top/bottom band, as a fraction of page height
+  const MIN_REPEATS = 3;
+
+  interface Line {
+    sig: string;
+    idxs: number[];
+    edge: boolean;
+  }
+  // Group each page's runs into visual lines (by baseline) and collect the
+  // signatures of lines sitting in the top/bottom bands.
+  const seenOn = new Map<string, Set<number>>();
+  const pageLines: Line[][] = pages.map((pg) => {
+    const byY = new Map<number, number[]>();
+    pg.texts.forEach((t, i) => {
+      const key = Math.round(t.box.y0 / 3);
+      const arr = byY.get(key);
+      if (arr) arr.push(i);
+      else byY.set(key, [i]);
+    });
+    const lines: Line[] = [];
+    for (const idxs of byY.values()) {
+      const y = pg.texts[idxs[0]].box.y0;
+      const edge =
+        pg.height > 0 &&
+        (y < pg.height * EDGE || y > pg.height * (1 - EDGE));
+      const sig = lineSignature(idxs.map((i) => pg.texts[i].str).join(" "));
+      lines.push({ sig, idxs, edge });
+      if (edge && sig.length >= 2) {
+        const set = seenOn.get(sig);
+        if (set) set.add(pg.p);
+        else seenOn.set(sig, new Set([pg.p]));
+      }
+    }
+    return lines;
+  });
+
+  pages.forEach((pg, pi) => {
+    const drop = new Set<number>();
+    for (const line of pageLines[pi]) {
+      if (!line.edge) continue;
+      const repeated = (seenOn.get(line.sig)?.size ?? 0) >= MIN_REPEATS;
+      const bareNumber = /^#$/.test(line.sig);
+      if (repeated || bareNumber) for (const i of line.idxs) drop.add(i);
+    }
+    if (drop.size) pg.texts = pg.texts.filter((_, i) => !drop.has(i));
+  });
+}
+
 /**
  * Extract review-relevant annotations from a PDF buffer, recovering the text
  * physically under each markup so it can later be matched to AsciiDoc source.
@@ -264,6 +335,8 @@ export async function extractAnnotations(
 
   const out: RawAnnotation[] = [];
   try {
+    // Gather every page first: furniture detection needs cross-page counts.
+    const pages: PageData[] = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
       const [annots, content] = await Promise.all([
@@ -277,11 +350,18 @@ export async function extractAnnotations(
         const box = itemBox(it as TextItem);
         if (box) texts.push({ str: it.str, box });
       }
+      const view = page.view; // [x0, y0, x1, y1] in points
+      pages.push({ p, annots, texts, height: (view?.[3] ?? 0) - (view?.[1] ?? 0) });
+    }
+    stripPageFurniture(pages);
 
+    for (const { p, annots, texts } of pages) {
       for (const a of annots) {
         const kind = subtypeToKind(a.subtype);
-        // Popups are containers for another annotation's comment; skip them.
-        if ((a.subtype || "").toLowerCase() === "popup") continue;
+        const sub = (a.subtype || "").toLowerCase();
+        // Navigation and form artifacts are not review marks; popups only
+        // mirror their parent annotation's comment.
+        if (sub === "link" || sub === "widget" || sub === "popup") continue;
         // Skip reply annotations that only echo a thread.
         if (a.inReplyTo) continue;
 

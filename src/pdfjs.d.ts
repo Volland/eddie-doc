@@ -27,6 +27,8 @@ declare module "pdfjs-dist/legacy/build/pdf.mjs" {
   export interface PdfPage {
     getAnnotations(opts?: { intent?: string }): Promise<PdfAnnotation[]>;
     getTextContent(): Promise<TextContent>;
+    /** Page box [x0, y0, x1, y1] in PDF points. */
+    view?: number[];
   }
   export interface PdfDocument {
     numPages: number;
