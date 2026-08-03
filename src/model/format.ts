@@ -28,8 +28,9 @@ export const SCHEMA_URL =
 export const FORMAT_VERSION = 2 as const;
 
 /**
- * Producer stamp written into every sidecar. Keep the version in sync with
- * package.json (release.sh bumps both).
+ * Producer stamp written into every sidecar. The version literal is rewritten
+ * from package.json by `scripts/sync-producer.mjs`, which runs as npm's
+ * "version" lifecycle hook during a release bump — do not edit it by hand.
  */
 export const PRODUCER = { name: "eddie-doc", version: "0.1.9" } as const;
 

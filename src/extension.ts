@@ -76,6 +76,15 @@ export function activate(context: vscode.ExtensionContext): void {
     treeDataProvider: tree,
   });
 
+  // Always-visible statement of the active triangle (source ⇄ PDF); clicking
+  // it opens the review switcher.
+  const pairStatus = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    90
+  );
+  pairStatus.command = "eddieDoc.switchReview";
+  context.subscriptions.push(pairStatus);
+
   /** Show `id`'s PDF region and remember which pair the preview now follows. */
   const showPreview = (adocPath: string, id: string): void => {
     previewItem(store, preview, adocPath, id);
@@ -121,9 +130,27 @@ export function activate(context: vscode.ExtensionContext): void {
   function syncActivePair(): void {
     const adoc = resolvedAdoc();
     const session = adoc ? store.get(adoc) : undefined;
+    const pdfName = session?.pdfPath ? path.basename(session.pdfPath) : "";
+    const pdfMissing =
+      !!session?.pdfPath && !fs.existsSync(session.pdfPath);
     treeView.description = session
-      ? path.basename(session.adocPath)
+      ? `${path.basename(session.adocPath)} ⇄ ${pdfName}${pdfMissing ? " (missing)" : ""}`
       : undefined;
+    if (session && adoc) {
+      const open = session.items.filter((i) => !i.resolved).length;
+      pairStatus.text = `$(comment-discussion) ${path.basename(
+        session.adocPath
+      )} ⇄ ${pdfName}${pdfMissing ? " $(warning)" : ""}`;
+      pairStatus.tooltip =
+        `Eddie Doc: ${session.items.length} annotation(s), ${open} open` +
+        (pdfMissing
+          ? ` — PDF not found at ${session.pdfPath}`
+          : "") +
+        `\nClick to switch to another review.`;
+      pairStatus.show();
+    } else {
+      pairStatus.hide();
+    }
     void vscode.commands.executeCommand(
       "setContext",
       "eddieDoc.hasMultipleReviews",
@@ -194,6 +221,25 @@ export function activate(context: vscode.ExtensionContext): void {
       pair = await confirmPairSanity(pair);
       if (!pair) return;
       const { adocPath, pdfPath } = pair;
+
+      // Each .adoc owns exactly one sidecar bound to one PDF. Re-binding it to
+      // a different PDF replaces that review — never do it silently.
+      const existing = store.get(adocPath);
+      if (
+        existing?.pdfPath &&
+        path.resolve(existing.pdfPath) !== path.resolve(pdfPath)
+      ) {
+        const replace = `Replace with ${path.basename(pdfPath)}`;
+        const choice = await vscode.window.showWarningMessage(
+          `"${path.basename(adocPath)}" is already reviewed against ` +
+            `"${path.basename(existing.pdfPath)}". Replace that review with ` +
+            `"${path.basename(pdfPath)}"? Resolved state and notes carry ` +
+            `over to annotations with matching content.`,
+          { modal: true },
+          replace
+        );
+        if (choice !== replace) return;
+      }
 
       await vscode.window.withProgress(
         {

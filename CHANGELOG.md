@@ -3,6 +3,25 @@
 All notable changes to **Eddie Doc — AsciiDoc PDF Review** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.10] — 2026-08-03
+
+Keeps the source ⇄ PDF ⇄ sidecar triangle explicit and safe: every chapter
+keeps its own `<file>.review.json` bound to its own PDF, and nothing rebinds
+silently.
+
+### Added
+- **Status-bar pair indicator** — always shows the active `source ⇄ PDF` pair
+  (with a warning marker when the recorded PDF is missing on disk); click it to
+  switch between loaded reviews.
+- The sidebar header now shows the full pair (`chapter.adoc ⇄ chapter.pdf`),
+  not just the source name.
+- **Re-bind guard** — opening a different PDF for a source that already has a
+  review asks before replacing it (state still carries over by content).
+
+### Changed
+- The sidecar producer version is now rewritten from package.json by an
+  `npm version` lifecycle hook, so it can no longer drift between releases.
+
 ## [0.1.9] — 2026-08-03
 
 Fixes driven by the first real-world publisher review round (a Manning
