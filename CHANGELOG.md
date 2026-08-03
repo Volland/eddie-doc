@@ -3,6 +3,10 @@
 All notable changes to **Eddie Doc — AsciiDoc PDF Review** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.11] — 2026-08-03
+- Release tooling: the producer-sync hook logs to stderr so the version bump's
+  output can no longer corrupt packaging.
+
 ## [0.1.10] — 2026-08-03
 
 Keeps the source ⇄ PDF ⇄ sidecar triangle explicit and safe: every chapter
