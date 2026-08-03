@@ -46,8 +46,11 @@ npm run typecheck
 npm test
 
 echo "[2/4] Bumping version ($BUMP)..."
-NEW_TAG="$(npm version "$BUMP" -m "release: v%s")"   # commits + tags vX.Y.Z, prints it
-VERSION="${NEW_TAG#v}"
+# Don't parse npm's stdout for the tag — lifecycle-hook banners pollute it.
+# Bump, then read the authoritative version back from package.json.
+npm version "$BUMP" -m "release: v%s" >/dev/null
+VERSION="$(node -p "require('./package.json').version")"
+NEW_TAG="v$VERSION"
 VSIX="eddie-doc-${VERSION}.vsix"
 echo "       -> $NEW_TAG"
 
