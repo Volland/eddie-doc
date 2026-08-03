@@ -15,4 +15,6 @@ if (out === src && !src.includes(`version: "${version}"`)) {
   process.exit(1);
 }
 writeFileSync(file, out);
-console.log(`sync-producer: ${file} -> ${version}`);
+// stderr, NOT stdout: release.sh captures `npm version`'s stdout to read the
+// new tag, and lifecycle-hook stdout would corrupt it.
+console.error(`sync-producer: ${file} -> ${version}`);
