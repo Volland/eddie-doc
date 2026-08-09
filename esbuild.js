@@ -39,12 +39,36 @@ const common = {
   define: { "globalThis.__EDDIE_DOC__": "true" },
 };
 
+/**
+ * Keep stdout clean for the CLI entry points.
+ *
+ * pdfjs-dist's legacy Node build prints "Cannot polyfill DOMMatrix…" and
+ * friends from module-level code that runs at *import* time — before any
+ * `verbosity: 0` we pass to getDocument can suppress it, and before any
+ * statement in our own entry file. Those lines land on stdout and corrupt
+ * `--json` output and anything a shell pipeline tries to parse.
+ *
+ * A banner runs ahead of all bundled module code, which is the only place early
+ * enough to intercept it. Diagnostics still reach the user — they are just
+ * routed to stderr, where they belong.
+ */
+const STDOUT_GUARD = `
+(() => {
+  const toStderr = (...a) => { try { process.stderr.write(a.join(" ") + "\\n"); } catch {} };
+  console.log = toStderr;
+  console.info = toStderr;
+  console.warn = toStderr;
+  console.debug = toStderr;
+})();
+`;
+
 async function main() {
   copyPdfAssets();
   const entries = [
     { entry: "src/extension.ts", outfile: "dist/extension.js", external: ["vscode"] },
-    { entry: "src/cli.ts", outfile: "dist/cli.js", external: [] },
-    { entry: "src/benchmark/main.ts", outfile: "dist/bench.js", external: [] },
+    // CLI entries write machine-readable output; guard their stdout.
+    { entry: "src/cli.ts", outfile: "dist/cli.js", external: [], guardStdout: true },
+    { entry: "src/benchmark/main.ts", outfile: "dist/bench.js", external: [], guardStdout: true },
   ].filter((e) => fs.existsSync(path.join(__dirname, e.entry)));
 
   const contexts = await Promise.all(
@@ -54,6 +78,7 @@ async function main() {
         entryPoints: [e.entry],
         outfile: e.outfile,
         external: e.external,
+        ...(e.guardStdout ? { banner: { js: STDOUT_GUARD } } : {}),
       })
     )
   );

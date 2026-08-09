@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -17,10 +18,17 @@ import { KIND_LABEL } from "./model/types.js";
 import { countNewlines, type ContentChange } from "./matching/posTrack.js";
 import { isAdocDoc, isAdocPath } from "./util.js";
 import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
-import { extractAnnotations } from "./pdf/extract.js";
+import { extractAnnotations, readPages } from "./pdf/extract.js";
+import { anchorItems } from "./pdf/anchor.js";
+import { stampPdf } from "./pdf/stamp.js";
 import { annotationsToAdoc, extractedAdocPath } from "./pdf/toAdoc.js";
 import { PdfPreviewPanel } from "./ui/pdfPreview.js";
 import { isSessionStale, renderReport } from "./model/report.js";
+import { stripMarkers } from "./source/markers.js";
+import {
+  ReviewCommentController,
+  type ReviewComment,
+} from "./ui/comments.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 
@@ -56,6 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const decorations = new DecorationManager(store);
   const diagnostics = new DiagnosticsManager(store);
+  const comments = new ReviewCommentController(store);
   const preview = new PdfPreviewPanel(context.extensionUri);
 
   // The last .adoc the user focused. When they navigate to a non-.adoc editor
@@ -167,6 +176,7 @@ export function activate(context: vscode.ExtensionContext): void {
     tree.refresh();
     decorations.update(vscode.window.activeTextEditor);
     diagnostics.update(vscode.window.activeTextEditor?.document);
+    comments.refresh();
     syncActivePair();
   }
   context.subscriptions.push(store.onDidChange(refreshUI));
@@ -315,6 +325,57 @@ export function activate(context: vscode.ExtensionContext): void {
         await extractAnnotationsToAdoc(arg);
       }
     ),
+
+    // --- reply threads (VS Code Comments API) ---
+    // The reply box hands us the thread plus the typed text; the thread's first
+    // comment carries the sidecar item id.
+    vscode.commands.registerCommand(
+      "eddieDoc.addReply",
+      (reply: vscode.CommentReply) => {
+        const head = reply.thread.comments[0] as ReviewComment | undefined;
+        if (!head) return;
+        store.addReply(head.adocPath, head.itemId, authorName(), reply.text);
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      "eddieDoc.editReply",
+      async (comment: ReviewComment) => {
+        if (!comment?.replyId) return;
+        const body = await vscode.window.showInputBox({
+          title: "Edit reply",
+          value: typeof comment.body === "string" ? comment.body : comment.body.value,
+        });
+        if (body == null) return;
+        store.editReply(comment.adocPath, comment.itemId, comment.replyId, body);
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      "eddieDoc.deleteReply",
+      async (comment: ReviewComment) => {
+        if (!comment?.replyId) return;
+        const pick = await vscode.window.showWarningMessage(
+          "Delete this reply?",
+          { modal: true },
+          "Delete"
+        );
+        if (pick !== "Delete") return;
+        store.deleteReply(comment.adocPath, comment.itemId, comment.replyId);
+      }
+    ),
+
+    vscode.commands.registerCommand("eddieDoc.stampPdf", async () => {
+      await stampReviewedPdf(store, preview);
+    }),
+
+    vscode.commands.registerCommand("eddieDoc.anchorSource", async () => {
+      await anchorSource(store);
+    }),
+
+    vscode.commands.registerCommand("eddieDoc.stripAnchors", async () => {
+      await stripSourceAnchors(store);
+    }),
 
     vscode.commands.registerCommand(
       "eddieDoc.revealAnnotation",
@@ -471,6 +532,7 @@ export function activate(context: vscode.ExtensionContext): void {
     treeView,
     decorations,
     diagnostics,
+    comments,
     { dispose: () => preview.dispose() },
     { dispose: () => store.dispose() }
   );
@@ -1098,6 +1160,197 @@ async function applyReplace(
 }
 
 /**
+ * Write `// eddie:<id>` markers into the source above every located annotation,
+ * and record the resulting anchors in the sidecar.
+ *
+ * This is the one command that edits the manuscript, so it is deliberately
+ * explicit: loading a review and re-mapping never touch the document. The
+ * rewrite goes through a single `WorkspaceEdit`, which makes it one undo step
+ * and leaves the file dirty for the author to inspect before saving.
+ *
+ * Asciidoctor strips `//` lines in its preprocessor, so markers cannot reach
+ * the rendered PDF — verified against the real chapter build, where the
+ * marked and unmarked sources render byte-identical text.
+ */
+async function anchorSource(store: ReviewStore): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  if (!adocPath || !store.get(adocPath)) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: open a document with a loaded review first."
+    );
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(adocPath)
+  );
+  const before = doc.getText();
+  const res = store.buildAnchors(adocPath, before);
+  if (!res) return;
+
+  if (res.inserted === 0) {
+    vscode.window.showInformationMessage(
+      res.anchored > 0
+        ? `Eddie Doc: all ${res.anchored} located annotation(s) were already anchored.`
+        : "Eddie Doc: nothing to anchor — no annotation has a source location yet."
+    );
+    return;
+  }
+
+  const pick = await vscode.window.showInformationMessage(
+    `Anchor ${res.anchored} annotation(s) in ${path.basename(adocPath)}?`,
+    {
+      modal: true,
+      detail:
+        `${res.inserted} marker comment(s) will be added to the source.\n\n` +
+        `Markers are AsciiDoc comments — they never render, and they keep ` +
+        `annotations attached to their paragraph even when the text is ` +
+        `rewritten outside the editor. Applied as one undoable edit.`,
+    },
+    "Anchor"
+  );
+  if (pick !== "Anchor") return;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    doc.uri,
+    new vscode.Range(
+      doc.positionAt(0),
+      doc.positionAt(before.length)
+    ),
+    res.source
+  );
+  const ok = await vscode.workspace.applyEdit(edit);
+  if (!ok) {
+    vscode.window.showWarningMessage("Eddie Doc: could not apply the anchors.");
+    return;
+  }
+  // Persist the anchors the store just attached to the items.
+  await store.remap(adocPath, threshold());
+  vscode.window.showInformationMessage(
+    `Eddie Doc: anchored ${res.anchored} annotation(s) with ${res.inserted} marker(s).`
+  );
+}
+
+/**
+ * Write the review onto a freshly rendered PDF, beside it as
+ * `<name>.reviewed.pdf`.
+ *
+ * The clean render is never modified: it is the file that goes to the
+ * publisher, and review markup must not be able to reach it by accident.
+ */
+async function stampReviewedPdf(
+  store: ReviewStore,
+  preview: PdfPreviewPanel
+): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const session = adocPath ? store.get(adocPath) : undefined;
+  if (!adocPath || !session) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: open a document with a loaded review first."
+    );
+    return;
+  }
+
+  // Default to a sibling PDF named after the source — what build-pdf.sh emits.
+  const guess = adocPath.replace(/\.adoc$/i, "") + ".pdf";
+  const picked = await vscode.window.showOpenDialog({
+    title: "Select the freshly generated PDF to stamp",
+    canSelectMany: false,
+    filters: { PDF: ["pdf"] },
+    defaultUri: fs.existsSync(guess)
+      ? vscode.Uri.file(guess)
+      : vscode.Uri.file(path.dirname(adocPath)),
+    openLabel: "Stamp",
+  });
+  const freshPath = picked?.[0]?.fsPath;
+  if (!freshPath) return;
+
+  const outPath = freshPath.replace(/\.pdf$/i, "") + ".reviewed.pdf";
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "Eddie Doc: stamping review…" },
+    async () => {
+      const bytes = new Uint8Array(fs.readFileSync(freshPath));
+      const pages = await readPages(bytes);
+      const source = fs.readFileSync(adocPath, "utf8");
+      const { anchored, unstamped } = anchorItems(session.items, source, pages);
+      const result = await stampPdf(bytes, anchored);
+      fs.writeFileSync(outPath, result.bytes);
+
+      const summary =
+        `Stamped ${result.marks} mark(s) and ${result.replies} repl(ies) into ` +
+        `${path.basename(outPath)}` +
+        (unstamped.length ? ` · ${unstamped.length} could not be placed` : "");
+      const actions = unstamped.length ? ["Open", "Show unplaced"] : ["Open"];
+      const pick = await vscode.window.showInformationMessage(summary, ...actions);
+      if (pick === "Open") preview.show(outPath, 1, [], path.basename(outPath));
+      else if (pick === "Show unplaced") {
+        const doc = await vscode.workspace.openTextDocument({
+          language: "markdown",
+          content: renderUnplaced(unstamped),
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      }
+    }
+  );
+}
+
+/** A short markdown list of what could not be stamped, and why. */
+function renderUnplaced(
+  unstamped: Array<{ item: ReviewItem; reason: string }>
+): string {
+  const lines = [
+    `# Annotations that could not be placed (${unstamped.length})`,
+    "",
+    "These stayed out of the stamped PDF rather than being guessed at.",
+    "",
+  ];
+  for (const u of unstamped) {
+    const text = (u.item.comment || u.item.anchoredText || "").replace(/\s+/g, " ").trim();
+    lines.push(`- **${KIND_LABEL[u.item.kind]}** · p${u.item.page} — ${u.reason}`);
+    if (text) lines.push(`  > ${text.slice(0, 200)}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+/** Remove every marker comment from the active document, as one undoable edit. */
+async function stripSourceAnchors(store: ReviewStore): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  if (!adocPath) return;
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(adocPath)
+  );
+  const before = doc.getText();
+  const after = stripMarkers(before);
+  if (after === before) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: no markers in this document."
+    );
+    return;
+  }
+  const removed = before.split(/\r?\n/).length - after.split(/\r?\n/).length;
+  const pick = await vscode.window.showInformationMessage(
+    `Remove ${removed} marker comment(s) from ${path.basename(adocPath)}?`,
+    {
+      modal: true,
+      detail:
+        "Annotations will fall back to block ids, fingerprints and text " +
+        "matching, so some may drift on the next re-map.",
+    },
+    "Remove"
+  );
+  if (pick !== "Remove") return;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    doc.uri,
+    new vscode.Range(doc.positionAt(0), doc.positionAt(before.length)),
+    after
+  );
+  await vscode.workspace.applyEdit(edit);
+}
+
+/**
  * Modal before/after confirmation. Returns true when the user approves (or the
  * change is a no-op). Keeps destructive/text edits an explicit, reviewed step.
  */
@@ -1154,6 +1407,34 @@ async function applyInsert(
   await vscode.workspace.applyEdit(edit);
   store.toggleResolved(adocPath, id);
   await revealItem(store, adocPath, id);
+}
+
+/** Cached so we shell out to git at most once per session. */
+let cachedAuthor: string | undefined;
+
+/**
+ * Display name for the author's replies: the explicit setting, else the local
+ * git identity, else a neutral fallback. Resolved lazily and memoized — this is
+ * on the path of every reply, and `git config` is a process spawn.
+ */
+function authorName(): string {
+  const configured = vscode.workspace
+    .getConfiguration("eddieDoc")
+    .get<string>("authorName", "")
+    .trim();
+  if (configured) return configured;
+  if (cachedAuthor !== undefined) return cachedAuthor;
+  try {
+    cachedAuthor =
+      execFileSync("git", ["config", "user.name"], {
+        encoding: "utf8",
+        timeout: 2000,
+        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      }).trim() || "Author";
+  } catch {
+    cachedAuthor = "Author"; // no git, no repo, or no configured identity
+  }
+  return cachedAuthor;
 }
 
 /** Score at/above which an auto-match is treated as high-confidence. */

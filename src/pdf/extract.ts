@@ -15,14 +15,15 @@ declare const __dirname: string;
 GlobalWorkerOptions.workerSrc = path.join(__dirname, "pdf.worker.mjs");
 
 /** Axis-aligned box in PDF user space (bottom-left origin). */
-interface Box {
+export interface Box {
   x0: number;
   y0: number;
   x1: number;
   y1: number;
 }
 
-interface PositionedText {
+/** A run of text from the PDF's content stream, with where it sits on the page. */
+export interface PositionedText {
   str: string;
   box: Box;
 }
@@ -256,6 +257,20 @@ interface PageData {
   height: number;
 }
 
+/**
+ * A page's searchable text layer: every run with its position, running
+ * headers/footers already removed.
+ */
+export interface PageText {
+  /** 1-based page number. */
+  page: number;
+  /** Page height in PDF points. */
+  height: number;
+  /** Page width in PDF points. */
+  width: number;
+  texts: PositionedText[];
+}
+
 /** Signature of a rendered line for repeated-furniture detection: digits are
  *  wildcarded so "22 Memory Systems…" and "23 Memory Systems…" collide. */
 function lineSignature(str: string): string {
@@ -318,6 +333,81 @@ function stripPageFurniture(pages: PageData[]): void {
   });
 }
 
+/** Load a PDF, handing pdfjs its own copy of the bytes (see below). */
+function loadDocument(data: Uint8Array) {
+  return getDocument({
+    // pdfjs TRANSFERS this array to its worker, which detaches the caller's
+    // buffer — `data.length` becomes 0 the moment loading starts. Callers that
+    // also fingerprint the bytes would then hash nothing (the sha-256 of zero
+    // bytes, e3b0c442…), silently killing staleness detection. Hand over a copy
+    // so the caller's array stays intact.
+    data: new Uint8Array(data),
+    useSystemFonts: true,
+    isEvalSupported: false,
+    disableFontFace: true,
+    verbosity: 0,
+  }).promise;
+}
+
+/**
+ * Read every page's positioned text, with running headers, footers and bare
+ * page numbers stripped.
+ *
+ * This is the searchable text layer of a rendered PDF. Extraction uses it to
+ * recover what sits under an editor's markup; stamping uses it in the opposite
+ * direction, to find where a line of source ended up on the page. Sharing one
+ * implementation keeps those two directions tokenizing identical input — a
+ * phrase found by one is findable by the other.
+ */
+export async function readPages(data: Uint8Array): Promise<PageText[]> {
+  const doc = await loadDocument(data);
+  try {
+    const pages = await gatherPages(doc);
+    stripPageFurniture(pages);
+    return pages.map((p) => {
+      const view = p.view;
+      return {
+        page: p.p,
+        height: p.height,
+        width: (view?.[2] ?? 0) - (view?.[0] ?? 0),
+        texts: p.texts,
+      };
+    });
+  } finally {
+    await doc.destroy();
+  }
+}
+
+/** Collect annotations + positioned text for every page of an open document. */
+async function gatherPages(
+  doc: Awaited<ReturnType<typeof loadDocument>>
+): Promise<Array<PageData & { view?: number[] }>> {
+  const pages: Array<PageData & { view?: number[] }> = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p);
+    const [annots, content] = await Promise.all([
+      page.getAnnotations({ intent: "display" }),
+      page.getTextContent(),
+    ]);
+
+    const texts: PositionedText[] = [];
+    for (const it of content.items) {
+      if (!("str" in it) || !it.str.trim()) continue;
+      const box = itemBox(it as TextItem);
+      if (box) texts.push({ str: it.str, box });
+    }
+    const view = page.view; // [x0, y0, x1, y1] in points
+    pages.push({
+      p,
+      annots,
+      texts,
+      height: (view?.[3] ?? 0) - (view?.[1] ?? 0),
+      view,
+    });
+  }
+  return pages;
+}
+
 /**
  * Extract review-relevant annotations from a PDF buffer, recovering the text
  * physically under each markup so it can later be matched to AsciiDoc source.
@@ -325,34 +415,12 @@ function stripPageFurniture(pages: PageData[]): void {
 export async function extractAnnotations(
   data: Uint8Array
 ): Promise<RawAnnotation[]> {
-  const doc = await getDocument({
-    data,
-    useSystemFonts: true,
-    isEvalSupported: false,
-    disableFontFace: true,
-    verbosity: 0,
-  }).promise;
+  const doc = await loadDocument(data);
 
   const out: RawAnnotation[] = [];
   try {
     // Gather every page first: furniture detection needs cross-page counts.
-    const pages: PageData[] = [];
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p);
-      const [annots, content] = await Promise.all([
-        page.getAnnotations({ intent: "display" }),
-        page.getTextContent(),
-      ]);
-
-      const texts: PositionedText[] = [];
-      for (const it of content.items) {
-        if (!("str" in it) || !it.str.trim()) continue;
-        const box = itemBox(it as TextItem);
-        if (box) texts.push({ str: it.str, box });
-      }
-      const view = page.view; // [x0, y0, x1, y1] in points
-      pages.push({ p, annots, texts, height: (view?.[3] ?? 0) - (view?.[1] ?? 0) });
-    }
+    const pages = await gatherPages(doc);
     stripPageFurniture(pages);
 
     for (const { p, annots, texts } of pages) {
@@ -415,11 +483,28 @@ export async function extractAnnotations(
     await doc.destroy();
   }
 
-  // Deduplicate ids (Acrobat sometimes emits paired markup+popup at same spot).
-  const seen = new Set<string>();
-  return out.filter((a) => {
-    if (seen.has(a.id)) return false;
-    seen.add(a.id);
-    return true;
-  });
+  return uniquifyIds(out);
+}
+
+/**
+ * Make ids unique without dropping annotations.
+ *
+ * Ids are derived from page + rounded geometry, which is not injective: two
+ * marks on the same paragraph round to the same box and collide. This used to
+ * be handled by discarding the later one — which silently lost real editorial
+ * marks. Re-importing a stamped PDF makes it routine, since several items that
+ * could not be placed on their exact words all get stamped over the same
+ * paragraph; a real chapter lost 9 of 40 that way.
+ *
+ * Colliding ids get a `#n` suffix in document order, so they stay stable across
+ * re-runs over the same file while remaining distinct.
+ */
+function uniquifyIds(items: RawAnnotation[]): RawAnnotation[] {
+  const count = new Map<string, number>();
+  for (const a of items) {
+    const n = count.get(a.id) ?? 0;
+    count.set(a.id, n + 1);
+    if (n > 0) a.id = `${a.id}#${n}`;
+  }
+  return items;
 }

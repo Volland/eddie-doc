@@ -120,6 +120,58 @@ annotation ids change with every re-export, but Eddie Doc fingerprints each
 annotation's content (kind, author, comment, marked text) and carries your
 resolved state, notes and manual links over to the matching annotations.
 
+## Replying, and keeping annotations across a rebuild
+
+Asciidoctor has no concept of PDF annotations, so every rebuild starts from a
+blank page and the editor's marks are gone. Two features close that loop.
+
+### Reply threads
+
+Each annotation appears as a threaded comment in the gutter beside the line it
+maps to: the editor's mark is the root post, your replies sit underneath. The
+editor's mark is read-only — it came from the PDF — while replies are yours to
+edit and delete. Replies live in the sidecar under `state.replies`, so they are
+committed with the manuscript and survive re-mapping. Set `eddieDoc.authorName`
+to control the name on them (it defaults to your git `user.name`).
+
+### Stamping a freshly generated PDF
+
+**Eddie Doc: Stamp Reviewed PDF** — or `eddie-doc stamp` in a build script —
+writes the marks and your replies into a newly rendered PDF as real PDF
+annotations, producing `<name>.reviewed.pdf` beside the clean render. The clean
+render is never modified, so the file you deliver can't accidentally ship with
+review markup on it.
+
+```bash
+asciidoctor-pdf -o build/ch04.pdf src/ch04.adoc
+node dist/cli.js stamp build/ch04.pdf --review src/ch04.review.json
+```
+
+Positions are **re-derived from the current source text**, never from the stored
+geometry — that described a PDF which no longer exists. Repagination, a font
+change or a theme tweak are therefore irrelevant. Where the words the editor
+marked have since been rewritten, the mark degrades to the paragraph and says so
+in its comment rather than silently claiming she marked text she never saw.
+Anything that can't be placed is reported, never guessed at.
+
+### Durable source anchors
+
+Live position tracking follows your edits inside VS Code, but a `sed`, a git
+merge or an agent rewriting a file bypasses it — and afterwards, matching the
+editor's (now outdated) PDF text against rewritten prose produces confident
+wrong answers.
+
+**Eddie Doc: Anchor Annotations in Source** writes invisible `// eddie:<id>`
+markers above annotated blocks. A marker lives *in* the text, so it moves with
+the paragraph no matter who edits it; delete the paragraph and the marker goes
+with it, which is the correct outcome. Asciidoctor strips `//` comments before
+rendering, so a marker can never reach the PDF or the file you deliver — the
+marked and unmarked sources render byte-identical text.
+
+Anchoring is opt-in per chapter and never happens automatically; **Remove Source
+Anchors** (or `eddie-doc strip`) takes them out again. Figures and tables need
+no marker: they anchor to the `[#id]` you already give them.
+
 ## The review sidecar (`.review.json`)
 
 The sidecar is a **portable, versioned, tool-agnostic** file you can commit and

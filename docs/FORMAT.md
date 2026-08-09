@@ -141,12 +141,56 @@ a cache, not ground truth.
 | Field | Req | Meaning |
 | --- | :-: | --- |
 | `startLine` / `endLine` | ✓ | **0-based**, inclusive, line range in the source. |
-| `score` | ✓ | 0–1 similarity of the matched span. |
-| `method` | – | `"fuzzy"` (token/bigram) or `"semantic"` (embedding fallback). |
+| `score` | ✓ | 0–1 similarity of the matched span. `1` for the deterministic methods. |
+| `method` | – | How the mapping was produced — see below. |
 | `sourceExcerpt` | – | A snapshot of the matched source text **for display/debug only**. It goes stale the moment the line is edited — never treat it as authoritative. |
+
+`method` splits into two families, and the distinction matters more than the score:
+
+| Method | Family | Meaning |
+| --- | --- | --- |
+| `marker` | deterministic | An `// eddie:<id>` marker comment was found in the source. |
+| `blockId` | deterministic | The enclosing `[#id]` block was found. |
+| `fingerprint` | deterministic | The enclosing block hashed to `anchor.blockFingerprint`. |
+| `fuzzy` | search | Token/bigram window match. |
+| `semantic` | search | Embedding similarity (opt-in, needs Ollama). |
+| `lexical` | search | Character-trigram containment. |
+
+The deterministic methods resolve an identity that was *recorded in the source*, so
+they are not similarity measurements and always win over the search methods. The
+search methods compare the editor's PDF text — which reflects the source as it was
+when the editor marked it up — against prose that may since have been rewritten, so
+they can and do produce confident-looking wrong answers.
 
 `match` is `null` when nothing cleared the threshold; the item is then
 *Unmatched* and awaits a manual link (`state.manualLine`).
+
+### `anchor` — durable source binding (optional)
+
+Where `match` is a recomputed guess, `anchor` records identities that **travel with
+the text itself** and therefore survive edits the matcher cannot follow — including
+edits made outside the extension, where live position tracking never sees them.
+
+```jsonc
+"anchor": {
+  "marker": "a3f21c94",
+  "blockId": "ch04-figure-anatomy",
+  "blockFingerprint": "9c1f4e02aa73b518",
+  "contextBefore": "two debts from earlier chapters come due here",
+  "contextAfter": "chapter 2 designed a memory system in the abstract"
+}
+```
+
+| Field | Req | Meaning |
+| --- | :-: | --- |
+| `marker` | – | Id of the `// eddie:<id>` comment injected into the source. Asciidoctor strips `//` lines before rendering, so a marker never reaches the PDF. |
+| `blockId` | – | Id of the enclosing AsciiDoc block (`[#ch04-figure-anatomy]`). Also the way to place a mark on a figure or table, which has no text layer to search. |
+| `blockFingerprint` | – | Truncated SHA-256 of the normalized enclosing block at anchor time. |
+| `contextBefore` / `contextAfter` | – | A few normalized words either side, for last-ditch re-matching. |
+
+The whole block is omitted for an un-anchored item. Anchors are written only when
+the user explicitly runs the anchor command — loading and re-mapping never modify
+the source document.
 
 > **Line numbers are 0-based** throughout the format (`match.startLine`,
 > `state.manualLine`). Editors that display 1-based line numbers add 1 for
@@ -160,9 +204,25 @@ a cache, not ground truth.
 | `confirmed` | – | The user vouched for the link (hand-picked, or accepted a low-confidence/semantic auto-match). Keeps it out of *Needs review*. |
 | `manualLine` | – | **0-based** line the user manually linked to; **overrides** `match`. |
 | `note` | – | Free-form reviewer note. |
+| `replies` | – | The author's reply thread under this annotation, oldest first. |
 
 The **effective line** of an item is `manualLine` when set, otherwise
 `match.startLine`, otherwise unmatched.
+
+Each entry in **`replies`** is the author answering the editor:
+
+```jsonc
+{
+  "id": "r-7f3a",
+  "author": "Volodymyr Pavlyshyn",
+  "createdAt": "2026-08-07T10:14:02.000Z",
+  "body": "Tightened this — the two debts are now named directly."
+}
+```
+
+All four fields are required. Replies are authored content, never recomputed: a
+re-map carries them across unchanged, and so does the fingerprint-based rescue that
+reattaches state when a re-exported PDF re-keys every annotation id.
 
 ## Compatibility & migration
 

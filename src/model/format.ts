@@ -16,8 +16,11 @@ import * as path from "node:path";
 import type {
   AnnotationKind,
   Match,
+  MatchMethod,
+  Reply,
   ReviewItem,
   ReviewSession,
+  SourceAnchor,
 } from "./types.js";
 
 /** Canonical identifier of the current format; also the `$schema` value. */
@@ -94,7 +97,7 @@ export interface MatchDoc {
   /** 0–1 similarity of the matched span. */
   score: number;
   /** How the match was produced. */
-  method?: "fuzzy" | "semantic" | "lexical";
+  method?: MatchMethod;
   /** Non-authoritative snapshot of the matched source text, for display only. */
   sourceExcerpt?: string;
 }
@@ -107,13 +110,22 @@ export interface StateDoc {
   /** 0-based line the user manually linked to; overrides `match`. */
   manualLine?: number;
   note?: string;
+  /** The author's reply thread, oldest first. */
+  replies?: Reply[];
 }
 
-/** One review item on disk: PDF annotation + match cache + review state. */
+/**
+ * One review item on disk, in four blocks that evolve and diff independently:
+ * what the PDF said (`annotation`, immutable), where the text lives
+ * (`anchor`, durable), what the matcher computed (`match`, a cache), and what
+ * the human decided (`state`).
+ */
 export interface ItemDoc {
   /** Stable id, ideally the PDF annotation id; falls back to page+geometry. */
   id: string;
   annotation: AnnotationDoc;
+  /** Durable source binding — survives edits the matcher cannot follow. */
+  anchor?: SourceAnchor;
   match: MatchDoc | null;
   state: StateDoc;
 }
@@ -169,6 +181,24 @@ export function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** SHA-256 of zero bytes. */
+export const EMPTY_SHA256 =
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+/**
+ * A recorded fingerprint, or undefined when it carries no information.
+ *
+ * A stored digest equal to {@link EMPTY_SHA256} never means "this file is
+ * empty" — it means the hash was taken over a buffer that had already been
+ * emptied. pdfjs transfers (and thereby detaches) the array it is handed, so
+ * sidecars written before that was fixed recorded the zero-byte digest for a
+ * perfectly good PDF. Treating it as a real digest would report those sessions
+ * as permanently stale, so it is normalized away on both read and write.
+ */
+function realSha(hex: string | undefined): string | undefined {
+  return hex && hex !== EMPTY_SHA256 ? hex : undefined;
+}
+
 /** Path of `target` relative to the sidecar's directory, POSIX-normalized. */
 function relFromSidecar(sidecar: string, target: string): string {
   const rel = path.relative(path.dirname(sidecar), target);
@@ -188,6 +218,33 @@ function cleanUndefined<T extends object>(obj: T): T {
   return obj;
 }
 
+/** An anchor with its empty fields dropped, or undefined when nothing is set. */
+function cleanAnchor(a: SourceAnchor | undefined): SourceAnchor | undefined {
+  if (!a) return undefined;
+  const out = cleanUndefined({
+    marker: a.marker || undefined,
+    blockId: a.blockId || undefined,
+    blockFingerprint: a.blockFingerprint || undefined,
+    contextBefore: a.contextBefore || undefined,
+    contextAfter: a.contextAfter || undefined,
+  });
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Copy a reply thread, dropping malformed entries. Undefined when empty. */
+function cleanReplies(replies: Reply[] | undefined): Reply[] | undefined {
+  if (!replies?.length) return undefined;
+  const out = replies
+    .filter((r) => r && typeof r.body === "string" && r.body.length > 0)
+    .map((r) => ({
+      id: r.id,
+      author: r.author,
+      createdAt: r.createdAt,
+      body: r.body,
+    }));
+  return out.length ? out : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Serialize: in-memory session -> on-disk v2 document
 // ---------------------------------------------------------------------------
@@ -204,12 +261,12 @@ export function toDocument(
   const integ = session.integrity ?? {};
   const source: FileRefDoc = cleanUndefined({
     path: relFromSidecar(sidecarPath, session.adocPath),
-    sha256: integ.sourceSha256,
+    sha256: realSha(integ.sourceSha256),
     bytes: integ.sourceBytes,
   });
   const pdf: PdfRefDoc = cleanUndefined({
     path: relFromSidecar(sidecarPath, session.pdfPath),
-    sha256: integ.pdfSha256,
+    sha256: realSha(integ.pdfSha256),
     bytes: undefined,
     annotationCount: integ.pdfAnnotationCount,
   });
@@ -243,8 +300,15 @@ export function toDocument(
       confirmed: it.confirmed || undefined,
       manualLine: it.manualLine,
       note: it.note,
+      replies: cleanReplies(it.replies),
     });
-    return { id: it.id, annotation, match, state };
+    return cleanUndefined({
+      id: it.id,
+      annotation,
+      anchor: cleanAnchor(it.anchor),
+      match,
+      state,
+    }) as ItemDoc;
   });
 
   return {
@@ -317,6 +381,8 @@ function fromV2(
       confirmed: s.confirmed || undefined,
       manualLine: s.manualLine,
       note: s.note,
+      replies: cleanReplies(s.replies),
+      anchor: cleanAnchor(d.anchor),
     }) as ReviewItem;
   });
 
@@ -329,9 +395,9 @@ function fromV2(
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     integrity: cleanUndefined({
-      sourceSha256: doc.source?.sha256,
+      sourceSha256: realSha(doc.source?.sha256),
       sourceBytes: doc.source?.bytes,
-      pdfSha256: doc.pdf?.sha256,
+      pdfSha256: realSha(doc.pdf?.sha256),
       pdfAnnotationCount: doc.pdf?.annotationCount,
     }),
     items,

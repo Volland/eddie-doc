@@ -1,14 +1,28 @@
+import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 import type {
   RawAnnotation,
+  Reply,
   ReviewItem,
   ReviewSession,
   SessionIntegrity,
 } from "./types.js";
 import { parse, serialize, sha256 } from "./format.js";
 import { extractAnnotations } from "../pdf/extract.js";
-import { mapAnnotations, matchOne, type MapStats } from "../matching/mapper.js";
+import {
+  effectiveLine,
+  mapAnnotations,
+  matchOne,
+  type MapStats,
+} from "../matching/mapper.js";
+import {
+  describeAnchor,
+  findMarkers,
+  injectMarkers,
+  resolveAnchor,
+  type MarkerTarget,
+} from "../source/markers.js";
 import { buildSourceIndex } from "../matching/fuzzyMatch.js";
 import { lexicalFallback } from "../matching/lexical.js";
 import { shiftLine, type ContentChange } from "../matching/posTrack.js";
@@ -21,18 +35,34 @@ import {
 
 /** Strip the review-state fields, leaving the raw annotation to re-map. */
 function toRaw(it: ReviewItem): RawAnnotation {
-  const { match, resolved, manualLine, confirmed, note, ...raw } = it;
+  const {
+    match,
+    resolved,
+    manualLine,
+    confirmed,
+    note,
+    replies,
+    anchor,
+    ...raw
+  } = it;
   void match;
   void resolved;
   void manualLine;
   void confirmed;
   void note;
+  void replies;
+  void anchor;
   return raw;
 }
 
 /** Sidecar path holding the persisted review for a given .adoc. */
 export function sidecarPath(adocPath: string): string {
   return adocPath.replace(/\.adoc$/i, "") + ".review.json";
+}
+
+/** Short random id for a reply. Unique within a thread is all that is needed. */
+function mintReplyId(): string {
+  return "r-" + randomBytes(4).toString("hex");
 }
 
 /**
@@ -89,6 +119,11 @@ export class ReviewStore {
     const bytes = new Uint8Array(fs.readFileSync(pdfPath));
     const sourceBytes = fs.readFileSync(adocPath);
     const source = sourceBytes.toString("utf8");
+    // Fingerprint BEFORE extraction. pdfjs used to detach this array (see
+    // extract.ts), which turned the digest into the sha-256 of zero bytes and
+    // silently disabled staleness detection. Hashing first makes that ordering
+    // bug unrepresentable regardless of what the extractor does with the array.
+    const pdfSha256 = sha256(bytes);
     const annots = await extractAnnotations(bytes);
     const prev = this.sessions.get(adocPath)?.items;
     const stats: MapStats = { carried: 0 };
@@ -113,7 +148,7 @@ export class ReviewStore {
       integrity: {
         sourceSha256: sha256(new Uint8Array(sourceBytes)),
         sourceBytes: sourceBytes.length,
-        pdfSha256: sha256(bytes),
+        pdfSha256,
         pdfAnnotationCount: annots.length,
       },
       items,
@@ -231,6 +266,51 @@ export class ReviewStore {
     this.touch(adocPath);
   }
 
+  /**
+   * Append a reply to an item's thread. Replies are authored content — they are
+   * never recomputed, and a re-map carries them across untouched.
+   */
+  addReply(adocPath: string, id: string, author: string, body: string): void {
+    const item = this.findItem(adocPath, id);
+    if (!item) return;
+    const text = body.trim();
+    if (!text) return;
+    const reply: Reply = {
+      id: mintReplyId(),
+      author,
+      createdAt: new Date().toISOString(),
+      body: text,
+    };
+    item.replies = [...(item.replies ?? []), reply];
+    this.touch(adocPath);
+  }
+
+  /** Edit a reply's text in place, keeping its id and original timestamp. */
+  editReply(
+    adocPath: string,
+    id: string,
+    replyId: string,
+    body: string
+  ): void {
+    const item = this.findItem(adocPath, id);
+    const text = body.trim();
+    if (!item?.replies || !text) return;
+    const idx = item.replies.findIndex((r) => r.id === replyId);
+    if (idx < 0) return;
+    item.replies[idx] = { ...item.replies[idx], body: text };
+    this.touch(adocPath);
+  }
+
+  /** Remove a reply. Drops the array entirely when the thread empties. */
+  deleteReply(adocPath: string, id: string, replyId: string): void {
+    const item = this.findItem(adocPath, id);
+    if (!item?.replies) return;
+    const left = item.replies.filter((r) => r.id !== replyId);
+    if (left.length === item.replies.length) return;
+    item.replies = left.length ? left : undefined;
+    this.touch(adocPath);
+  }
+
   /** Mark an auto/semantic match as vouched-for so it leaves "Needs review". */
   confirmMatch(adocPath: string, id: string): void {
     const item = this.findItem(adocPath, id);
@@ -248,11 +328,67 @@ export class ReviewStore {
     const item = this.findItem(adocPath, id);
     if (!item) return;
     const source = fs.readFileSync(adocPath, "utf8");
+    // Honour a recorded anchor here exactly as the bulk re-map does, or this
+    // single-item action would silently downgrade an anchored item to a guess.
+    const hit = resolveAnchor(source, item.anchor);
+    if (hit) {
+      item.match = {
+        startLine: hit.line,
+        endLine: hit.endLine,
+        score: 1,
+        method: hit.method,
+        sourceExcerpt: hit.excerpt.slice(0, 200),
+      };
+      item.manualLine = undefined;
+      item.confirmed = true; // a resolved identity is not a guess
+      this.touch(adocPath);
+      return;
+    }
     const idx = buildSourceIndex(source);
     item.match = matchOne(item, idx, threshold);
     item.manualLine = undefined;
     item.confirmed = false; // fresh auto-match — back up for review
     this.touch(adocPath);
+  }
+
+  /**
+   * Inject `// eddie:<id>` markers into the source for every item that has a
+   * location, and record the resulting anchors. Returns the rewritten source
+   * for the caller to apply as a workspace edit — this method deliberately does
+   * NOT write the file, so anchoring stays a single undoable editor action.
+   *
+   * Anchoring is always explicit: loading and re-mapping never touch the
+   * manuscript.
+   */
+  buildAnchors(
+    adocPath: string,
+    source: string
+  ): { source: string; inserted: number; anchored: number } | undefined {
+    const session = this.sessions.get(adocPath);
+    if (!session) return undefined;
+
+    const targets: MarkerTarget[] = [];
+    for (const it of session.items) {
+      const line = effectiveLine(it);
+      if (line === Number.MAX_SAFE_INTEGER) continue; // unmatched — nothing to anchor
+      targets.push({ itemId: it.id, line });
+    }
+    if (!targets.length) return { source, inserted: 0, anchored: 0 };
+
+    const res = injectMarkers(source, targets);
+    // Describe each anchor against the REWRITTEN source so block fingerprints
+    // and context reflect what will actually be on disk.
+    const markers = findMarkers(res.source);
+    let anchored = 0;
+    for (const it of session.items) {
+      const markerId = res.assigned.get(it.id);
+      if (!markerId) continue;
+      const hit = markers.get(markerId);
+      if (!hit) continue;
+      it.anchor = describeAnchor(res.source, hit.targetLine, markerId);
+      anchored++;
+    }
+    return { source: res.source, inserted: res.inserted, anchored };
   }
 
   private touch(adocPath: string): void {

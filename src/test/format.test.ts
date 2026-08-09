@@ -1,5 +1,11 @@
 import * as assert from "node:assert";
-import { parse, serialize, toDocument, sha256 } from "../model/format.js";
+import {
+  parse,
+  serialize,
+  toDocument,
+  sha256,
+  EMPTY_SHA256,
+} from "../model/format.js";
 import type { ReviewSession } from "../model/types.js";
 
 const SIDECAR = "/proj/book/chapter-01.review.json";
@@ -139,5 +145,135 @@ describe("review format", () => {
     const d = sha256(new Uint8Array([1, 2, 3]));
     assert.match(d, /^[0-9a-f]{64}$/);
     assert.strictEqual(d, sha256(new Uint8Array([1, 2, 3])));
+  });
+
+  it("round-trips reply threads and source anchors", () => {
+    const before = sampleSession();
+    before.items[0].anchor = {
+      marker: "a3f21c94",
+      blockId: "ch04-figure-anatomy",
+      blockFingerprint: "9c1f4e02aa73b518",
+      contextBefore: "two debts from earlier chapters",
+      contextAfter: "chapter 2 designed a memory system",
+    };
+    before.items[0].replies = [
+      {
+        id: "r-7f3a",
+        author: "Volodymyr Pavlyshyn",
+        createdAt: "2026-08-07T10:14:02.000Z",
+        body: "Tightened this — the two debts are now named directly.",
+      },
+      {
+        id: "r-9b21",
+        author: "Volodymyr Pavlyshyn",
+        createdAt: "2026-08-07T10:20:00.000Z",
+        body: "Second pass: also cut the trailing clause.",
+      },
+    ];
+
+    const doc = toDocument(before, SIDECAR);
+    // `anchor` is a sibling of annotation/match/state, not nested inside them.
+    assert.strictEqual(doc.items[0].anchor?.marker, "a3f21c94");
+    assert.strictEqual(doc.items[0].anchor?.blockId, "ch04-figure-anatomy");
+    assert.strictEqual(doc.items[0].state.replies?.length, 2);
+
+    const after = parse(serialize(before, SIDECAR), SIDECAR, before.adocPath);
+    assert.ok(after);
+    const a0 = after!.items[0];
+    assert.deepStrictEqual(a0.anchor, before.items[0].anchor);
+    assert.deepStrictEqual(a0.replies, before.items[0].replies);
+    // Order is meaningful — a thread reads oldest first.
+    assert.strictEqual(a0.replies?.[0].id, "r-7f3a");
+    // An item with neither block stays clean rather than gaining empty ones.
+    assert.strictEqual(after!.items[1].anchor, undefined);
+    assert.strictEqual(after!.items[1].replies, undefined);
+  });
+
+  it("omits empty anchors and reply lists rather than writing husks", () => {
+    const s = sampleSession();
+    s.items[0].anchor = {}; // every field unset
+    s.items[0].replies = [];
+    const doc = toDocument(s, SIDECAR);
+    assert.ok(!("anchor" in doc.items[0]));
+    assert.strictEqual(doc.items[0].state.replies, undefined);
+    // Match the JSON key, not the bare word — `anchoredText` contains it.
+    const text = serialize(s, SIDECAR);
+    assert.ok(!/"anchor"\s*:/.test(text));
+    assert.ok(!/"replies"\s*:/.test(text));
+  });
+
+  it("accepts the deterministic match methods", () => {
+    const s = sampleSession();
+    s.items[0].match = {
+      startLine: 6,
+      endLine: 7,
+      score: 1,
+      method: "marker",
+      sourceExcerpt: "x",
+    };
+    const after = parse(serialize(s, SIDECAR), SIDECAR, s.adocPath);
+    assert.strictEqual(after!.items[0].match?.method, "marker");
+  });
+
+  it("migrates a v1 sidecar to items with no replies or anchor", () => {
+    const v1 = JSON.stringify({
+      version: 1,
+      adocPath: "/old/chapter-01.adoc",
+      pdfPath: "/proj/book/chapter-01.annotated.pdf",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      items: [
+        {
+          id: "p1-highlight-1-1",
+          kind: "highlight",
+          page: 1,
+          rect: [0, 0, 1, 1],
+          match: null,
+          resolved: false,
+        },
+      ],
+    });
+    const session = parse(v1, SIDECAR, "/proj/book/chapter-01.adoc");
+    assert.ok(session);
+    assert.strictEqual(session!.items[0].replies, undefined);
+    assert.strictEqual(session!.items[0].anchor, undefined);
+    // And upgrading it writes a valid v2 item without empty blocks.
+    const doc = toDocument({ ...session!, version: 2 }, SIDECAR);
+    assert.ok(!("anchor" in doc.items[0]));
+  });
+
+  // A zero-byte digest never means "the file was empty" — it means the hash ran
+  // over a buffer pdfjs had already detached. Writing it out would report a
+  // perfectly good session as permanently stale.
+  it("never writes the zero-byte digest as a fingerprint", () => {
+    const s = sampleSession();
+    s.integrity = { ...s.integrity, pdfSha256: EMPTY_SHA256 };
+    const doc = toDocument(s, SIDECAR);
+    assert.strictEqual(doc.pdf.sha256, undefined);
+    // The real source digest beside it is untouched.
+    assert.strictEqual(doc.source.sha256, "a".repeat(64));
+    // And it must not survive into the serialized text at all.
+    assert.ok(!serialize(s, SIDECAR).includes(EMPTY_SHA256));
+  });
+
+  it("ignores the zero-byte digest in sidecars already written with it", () => {
+    const doc = JSON.stringify({
+      version: 2,
+      createdAt: "2026-08-04T06:22:01.958Z",
+      updatedAt: "2026-08-04T07:42:18.092Z",
+      source: { path: "chapter-01.adoc", sha256: "a".repeat(64), bytes: 71060 },
+      pdf: {
+        path: "chapter-01.annotated.pdf",
+        sha256: EMPTY_SHA256,
+        annotationCount: 45,
+      },
+      items: [],
+    });
+    const session = parse(doc, SIDECAR, "/proj/book/chapter-01.adoc");
+    assert.ok(session);
+    assert.strictEqual(session!.integrity?.pdfSha256, undefined);
+    // The rest of the integrity block still loads.
+    assert.strictEqual(session!.integrity?.sourceSha256, "a".repeat(64));
+    assert.strictEqual(session!.integrity?.pdfAnnotationCount, 45);
   });
 });

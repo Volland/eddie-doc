@@ -38,19 +38,88 @@ export interface RawAnnotation {
   rect: [number, number, number, number];
 }
 
+/**
+ * How a match was produced, in descending order of trust.
+ *
+ * The first three are *deterministic* — they resolve an identity that was
+ * recorded in the source, so they are not similarity scores at all and always
+ * beat the searching tiers below them:
+ * - `marker`      — an `// eddie:<id>` comment line was found in the source.
+ * - `blockId`     — the enclosing `[#id]` AsciiDoc block was found.
+ * - `fingerprint` — the enclosing block hashed to the value recorded at map time.
+ *
+ * The rest search for similar text and can be wrong:
+ * - `fuzzy`    — token/bigram window match.
+ * - `semantic` — embedding similarity (opt-in, needs Ollama).
+ * - `lexical`  — character-trigram containment.
+ */
+export type MatchMethod =
+  | "marker"
+  | "blockId"
+  | "fingerprint"
+  | "fuzzy"
+  | "semantic"
+  | "lexical";
+
+/** Methods that resolve a recorded identity rather than guessing by similarity. */
+export const DETERMINISTIC_METHODS: readonly MatchMethod[] = [
+  "marker",
+  "blockId",
+  "fingerprint",
+];
+
+/** True when `method` resolved a recorded identity, so its score is not a guess. */
+export function isDeterministic(method: MatchMethod | undefined): boolean {
+  return method !== undefined && DETERMINISTIC_METHODS.includes(method);
+}
+
 /** Result of matching a raw annotation against the AsciiDoc source. */
 export interface Match {
   /** 0-based start line in the source document. */
   startLine: number;
   /** 0-based end line (inclusive). */
   endLine: number;
-  /** 0-1 similarity of the best matched span. */
+  /** 0-1 similarity of the best matched span. 1 for deterministic methods. */
   score: number;
   /** The source text span that matched (for display / debugging). */
   sourceExcerpt: string;
-  /** How the match was produced: token fuzzy match, semantic embedding, or
-   *  character-trigram lexical fallback. */
-  method?: "fuzzy" | "semantic" | "lexical";
+  /** How the match was produced. See {@link MatchMethod}. */
+  method?: MatchMethod;
+}
+
+/** One entry in an item's reply thread — the author answering the editor. */
+export interface Reply {
+  /** Stable id so an edit or delete addresses exactly one reply. */
+  id: string;
+  /** Display name of the replier. */
+  author: string;
+  /** ISO-8601 creation timestamp. */
+  createdAt: string;
+  /** The reply text. */
+  body: string;
+}
+
+/**
+ * A durable, edit-resistant binding of an item to a place in the source.
+ *
+ * Line numbers go stale the moment someone edits outside the extension, and
+ * matching the editor's (now-outdated) PDF text against rewritten prose is
+ * unreliable — it is what produces sub-0.7 scores and wrong anchors. This block
+ * records identities that *travel with the text itself*, so re-mapping can
+ * resolve them instead of searching. Populated by the anchor command; every
+ * field is optional because an un-anchored session has none of them.
+ */
+export interface SourceAnchor {
+  /** Id of the `// eddie:<id>` marker comment injected into the source. */
+  marker?: string;
+  /** Id of the enclosing AsciiDoc block (`[#ch04-figure-anatomy]`), if any. */
+  blockId?: string;
+  /** Truncated SHA-256 of the normalized enclosing block text at anchor time. */
+  blockFingerprint?: string;
+  /** A few normalized words before the anchored block, for last-ditch matching. */
+  contextBefore?: string;
+  /** A few normalized words after the anchored block. */
+  contextAfter?: string;
 }
 
 /** A fully-resolved review item: annotation + where it lives in source + state. */
@@ -65,6 +134,10 @@ export interface ReviewItem extends RawAnnotation {
    */
   confirmed?: boolean;
   note?: string;
+  /** The author's reply thread under this annotation, oldest first. */
+  replies?: Reply[];
+  /** Durable source binding that survives edits made outside the extension. */
+  anchor?: SourceAnchor;
 }
 
 /**

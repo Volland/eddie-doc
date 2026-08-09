@@ -120,6 +120,36 @@
         "command": "eddieDoc.exportReport",
         "title": "Eddie Doc: Export Review Report",
         "icon": "$(book)"
+      },
+      {
+        "command": "eddieDoc.addReply",
+        "title": "Reply",
+        "icon": "$(reply)"
+      },
+      {
+        "command": "eddieDoc.editReply",
+        "title": "Edit Reply",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "eddieDoc.deleteReply",
+        "title": "Delete Reply",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "eddieDoc.stampPdf",
+        "title": "Eddie Doc: Stamp Reviewed PDF",
+        "icon": "$(file-pdf)"
+      },
+      {
+        "command": "eddieDoc.anchorSource",
+        "title": "Eddie Doc: Anchor Annotations in Source",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "eddieDoc.stripAnchors",
+        "title": "Eddie Doc: Remove Source Anchors",
+        "icon": "$(pin)"
       }
     ],
     "viewsContainers": {
@@ -177,6 +207,16 @@
           "command": "eddieDoc.exportReport",
           "when": "view == eddieDoc.annotations",
           "group": "navigation@5"
+        },
+        {
+          "command": "eddieDoc.anchorSource",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@6"
+        },
+        {
+          "command": "eddieDoc.stampPdf",
+          "when": "view == eddieDoc.annotations",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -262,12 +302,52 @@
           "group": "eddieDoc@2"
         }
       ],
+      "comments/commentThread/context": [
+        {
+          "command": "eddieDoc.addReply",
+          "when": "commentController == eddieDoc.review",
+          "group": "inline@1"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "eddieDoc.editReply",
+          "when": "commentController == eddieDoc.review && comment == eddieDoc.reply",
+          "group": "group@1"
+        },
+        {
+          "command": "eddieDoc.deleteReply",
+          "when": "commentController == eddieDoc.review && comment == eddieDoc.reply",
+          "group": "group@2"
+        }
+      ],
       "commandPalette": [
         {
           "command": "eddieDoc.openReview"
         },
         {
+          "command": "eddieDoc.addReply",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.editReply",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.deleteReply",
+          "when": "false"
+        },
+        {
           "command": "eddieDoc.extractAnnotations"
+        },
+        {
+          "command": "eddieDoc.anchorSource"
+        },
+        {
+          "command": "eddieDoc.stripAnchors"
+        },
+        {
+          "command": "eddieDoc.stampPdf"
         },
         {
           "command": "eddieDoc.switchReview"
@@ -339,6 +419,11 @@
           "default": true,
           "description": "For annotations the token matcher can't place, fall back to a built-in character-trigram similarity over source paragraphs. Runs locally, no setup; rescued links land in 'Needs review'."
         },
+        "eddieDoc.authorName": {
+          "type": "string",
+          "default": "",
+          "description": "Name shown on your replies to editor annotations. Leave empty to use your git user.name."
+        },
         "eddieDoc.lexicalThreshold": {
           "type": "number",
           "default": 0.6,
@@ -370,6 +455,7 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.0.379"
   }
 }

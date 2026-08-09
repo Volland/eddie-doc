@@ -1,5 +1,9 @@
 import * as assert from "node:assert";
-import { mapAnnotations, effectiveLine } from "../matching/mapper.js";
+import {
+  mapAnnotations,
+  effectiveLine,
+  type MapStats,
+} from "../matching/mapper.js";
 import type { RawAnnotation, ReviewItem } from "../model/types.js";
 
 const SOURCE = [
@@ -94,7 +98,7 @@ describe("mapAnnotations", () => {
         note: "done in draft 2",
       },
     ];
-    const stats = { carried: 0 };
+    const stats: MapStats = { carried: 0 };
     const items = mapAnnotations(
       [
         ann("new-geometry", {
@@ -122,7 +126,7 @@ describe("mapAnnotations", () => {
         resolved: true,
       },
     ];
-    const stats = { carried: 0 };
+    const stats: MapStats = { carried: 0 };
     // Same id → carried by id, not counted as a fingerprint carry.
     const byId = mapAnnotations(
       [ann("a", { comment: "Tighten this.", anchoredText: "some words" })],
@@ -181,5 +185,111 @@ describe("mapAnnotations", () => {
       items.map((i) => i.id),
       ["early", "later", "nope"]
     );
+  });
+});
+
+describe("mapAnnotations with source anchors", () => {
+  // The scenario this whole mechanism exists for, drawn from a real chapter:
+  // the editor marked a sentence, the author then rewrote it, and the editor's
+  // wording no longer appears anywhere. Fuzzy matching does not fail here — it
+  // succeeds, confidently, on the wrong paragraph. The anchor prevents that.
+  // The paragraph the editor marked has been rewritten so completely that none
+  // of her wording survives in it — while another paragraph further down still
+  // shares most of those words. This is the shape of the real CH04 failure.
+  const REWRITTEN = [
+    "= Doc", // 0
+    "", // 1
+    "// eddie:aaaaaaaa", // 2
+    "Identity is the component the whole book rests on.", // 3  <- the right place
+    "", // 4
+    "The previous chapter looked at agents from the outside and", // 5  <- decoy
+    "classified them by autonomy, architecture and mission.", // 6
+  ].join("\n");
+
+  const editorsWording = ann("x", {
+    anchoredText:
+      "The previous chapter looked at agents from the outside, and classified " +
+      "them three ways: by autonomy, by architecture, and by mission.",
+  });
+
+  function priorWith(anchor?: ReviewItem["anchor"]): ReviewItem[] {
+    return [
+      {
+        ...editorsWording,
+        match: null,
+        resolved: false,
+        anchor,
+      } as ReviewItem,
+    ];
+  }
+
+  it("places an item by its marker, not by searching", () => {
+    const stats: MapStats = { carried: 0 };
+    const items = mapAnnotations(
+      [editorsWording],
+      REWRITTEN,
+      { threshold: 0.5 },
+      priorWith({ marker: "aaaaaaaa" }),
+      stats
+    );
+    assert.strictEqual(items[0].match?.method, "marker");
+    assert.strictEqual(items[0].match?.score, 1);
+    assert.strictEqual(effectiveLine(items[0]), 3);
+    assert.strictEqual(stats.anchored, 1);
+    assert.strictEqual(stats.anchorsLost, 0);
+  });
+
+  it("rescues an item fuzzy matching would confidently misplace", () => {
+    const without = mapAnnotations(
+      [editorsWording],
+      REWRITTEN,
+      { threshold: 0.5 },
+      priorWith(undefined)
+    );
+    // Unanchored, the matcher does not fail — it succeeds on the WRONG
+    // paragraph, because that is where the editor's old wording still lives.
+    assert.ok(without[0].match, "fuzzy finds a confident match");
+    assert.strictEqual(effectiveLine(without[0]), 5, "…and it is the decoy");
+
+    const withAnchor = mapAnnotations(
+      [editorsWording],
+      REWRITTEN,
+      { threshold: 0.5 },
+      priorWith({ marker: "aaaaaaaa" })
+    );
+    assert.strictEqual(effectiveLine(withAnchor[0]), 3, "anchor wins");
+    assert.strictEqual(withAnchor[0].match?.method, "marker");
+  });
+
+  it("carries the anchor and replies across a re-map", () => {
+    const prior = priorWith({ marker: "aaaaaaaa" });
+    prior[0].replies = [
+      { id: "r1", author: "Author", createdAt: "2026-08-07T00:00:00Z", body: "Fixed." },
+    ];
+    const items = mapAnnotations(
+      [editorsWording],
+      REWRITTEN,
+      { threshold: 0.5 },
+      prior
+    );
+    assert.deepStrictEqual(items[0].anchor, { marker: "aaaaaaaa" });
+    assert.strictEqual(items[0].replies?.[0].body, "Fixed.");
+  });
+
+  it("reports a lost anchor and falls back to searching", () => {
+    const gutted = ["= Doc", "", "Reification lets us make statements."].join("\n");
+    const stats: MapStats = { carried: 0 };
+    const items = mapAnnotations(
+      [editorsWording],
+      gutted,
+      { threshold: 0.5 },
+      priorWith({ marker: "aaaaaaaa" }),
+      stats
+    );
+    assert.strictEqual(stats.anchorsLost, 1);
+    assert.strictEqual(stats.anchored, 0);
+    // The item is not silently dropped — it still exists to be triaged.
+    assert.strictEqual(items.length, 1);
+    assert.notStrictEqual(items[0].match?.method, "marker");
   });
 });

@@ -171,8 +171,15 @@
         },
         "method": {
           "type": "string",
-          "enum": ["fuzzy", "semantic", "lexical"],
-          "description": "How the match was produced."
+          "enum": [
+            "marker",
+            "blockId",
+            "fingerprint",
+            "fuzzy",
+            "semantic",
+            "lexical"
+          ],
+          "description": "How the match was produced. marker/blockId/fingerprint resolve an identity recorded in the source and are authoritative; fuzzy/semantic/lexical search for similar text and can be wrong."
         },
         "sourceExcerpt": {
           "type": "string",
@@ -196,7 +203,60 @@
           "minimum": 0,
           "description": "0-based line the user manually linked to; overrides match."
         },
-        "note": { "type": "string" }
+        "note": { "type": "string" },
+        "replies": {
+          "type": "array",
+          "description": "The author's reply thread under this annotation, oldest first.",
+          "items": { "$ref": "#/$defs/reply" }
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "description": "One entry in an item's reply thread.",
+      "required": ["id", "author", "createdAt", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable id so an edit or delete addresses exactly one reply."
+        },
+        "author": { "type": "string", "description": "Display name of the replier." },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 creation timestamp."
+        },
+        "body": { "type": "string", "minLength": 1 }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "description": "Durable binding of an item to a place in the source. Unlike match, these identities travel with the text itself, so they survive edits made outside the extension. Every field is optional; an un-anchored item omits the block entirely.",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "marker": {
+          "type": "string",
+          "description": "Id of the `// eddie:<id>` marker comment injected into the source."
+        },
+        "blockId": {
+          "type": "string",
+          "description": "Id of the enclosing AsciiDoc block, e.g. ch04-figure-anatomy."
+        },
+        "blockFingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8,64}$",
+          "description": "Truncated SHA-256 of the normalized enclosing block text at anchor time."
+        },
+        "contextBefore": {
+          "type": "string",
+          "description": "A few normalized words before the anchored block."
+        },
+        "contextAfter": {
+          "type": "string",
+          "description": "A few normalized words after the anchored block."
+        }
       }
     },
     "item": {
@@ -209,6 +269,7 @@
           "description": "Stable id — the PDF annotation id when available, else page+geometry."
         },
         "annotation": { "$ref": "#/$defs/annotation" },
+        "anchor": { "$ref": "#/$defs/anchor" },
         "match": { "$ref": "#/$defs/match" },
         "state": { "$ref": "#/$defs/state" }
       }

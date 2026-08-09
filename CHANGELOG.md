@@ -3,6 +3,57 @@
 All notable changes to **Eddie Doc — AsciiDoc PDF Review** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Closes the review loop. Annotations used to be lost the moment the PDF was
+rebuilt — Asciidoctor has no concept of them — and there was nowhere to answer
+the editor. Now the review survives a rebuild, and replies are first-class.
+
+### Added
+- **Stamp the review onto a fresh render** — `eddie-doc stamp` (and
+  *Eddie Doc: Stamp Reviewed PDF*) writes the editor's marks and your replies
+  into a newly generated PDF as real PDF annotations, producing
+  `<name>.reviewed.pdf` beside the untouched clean render. Positions are
+  re-derived from the *current* source text, so repagination, font changes and
+  rewrites don't matter. Every annotation carries an explicit appearance stream
+  — without one, Preview.app draws nothing at all.
+- **Reply threads** — annotations are now threaded comments in the editor
+  gutter, via VS Code's native Comments API. Replies persist in the sidecar
+  (`state.replies`) and are written into the stamped PDF as `/IRT` threads,
+  which Acrobat renders as a conversation. `eddieDoc.authorName` sets the name
+  on your replies (defaults to your git `user.name`).
+- **Durable source anchors** — *Eddie Doc: Anchor Annotations in Source* writes
+  invisible `// eddie:<id>` markers above annotated blocks and records them in
+  `state`/`anchor`. A marker travels with the text, so an annotation stays on
+  its paragraph even when the prose is rewritten outside the editor, where live
+  position tracking cannot follow. Asciidoctor strips `//` comments before
+  rendering: verified against a real 31-page chapter, the marked and unmarked
+  sources produce byte-identical rendered text and the same named destinations.
+  Anchoring is opt-in per chapter and never happens automatically; `strip`
+  removes the markers again.
+- `match.method` gained the deterministic tiers `marker`, `blockId` and
+  `fingerprint`. These resolve an identity recorded in the source rather than
+  measuring similarity, so they always win over `fuzzy`/`semantic`/`lexical`.
+- CLI verbs: `map` (the previous behaviour, still the default), `stamp`,
+  `anchor`, `strip`. `scripts/vendor-cli.sh` copies the built CLI — and the
+  pdfjs worker it needs beside it — into a manuscript repo.
+
+### Fixed
+- **Input fingerprints were silently blank.** pdfjs *transfers* the array it is
+  handed to its worker, detaching the caller's buffer, so hashing the same array
+  afterwards hashed zero bytes and recorded `e3b0c442…` — the SHA-256 of nothing
+  — as the PDF's digest. Staleness detection was dead for every sidecar written
+  that way. The extractor now hands pdfjs a copy, the store fingerprints before
+  extracting, and the zero-byte digest is ignored on read so existing sidecars
+  recover instead of reporting as permanently stale.
+- **Annotations at the same spot were dropped.** Item ids derive from page plus
+  rounded geometry, which is not unique: two marks on one paragraph collided and
+  the later one was discarded. Colliding ids are now suffixed instead. A real
+  chapter lost 9 of 40 annotations to this on re-import.
+- `--json` output could be corrupted by pdfjs's import-time polyfill warnings,
+  which went to stdout. CLI results now go to stdout and all diagnostics to
+  stderr, so the output is safe to pipe.
+
 ## [0.1.11] — 2026-08-03
 - Release tooling: the producer-sync hook logs to stderr so the version bump's
   output can no longer corrupt packaging.
