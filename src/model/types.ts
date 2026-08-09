@@ -141,6 +141,117 @@ export interface ReviewItem extends RawAnnotation {
 }
 
 /**
+ * What kind of PDF a mapping was built from. The editorial round-trip involves
+ * several PDFs of the same chapter and they are not interchangeable: only an
+ * `annotated` one carries marks to map, a `clean` render is what gets stamped,
+ * and a `stamped` one is output. Recording it stops a later round from being
+ * mapped against the wrong artifact.
+ */
+export type PdfRole =
+  | "annotated" // came back from an editor with marks on it
+  | "proof" // a proofing copy, marks optional
+  | "clean" // a fresh render with no review markup
+  | "stamped" // an Eddie Doc output carrying marks + replies
+  | "other";
+
+/** How a mapping file was produced — what kind of mapping this sidecar is. */
+export type MappingKind =
+  | "annotations" // PDF annotations extracted and mapped onto the source
+  | "manual" // links made by hand, no annotation source
+  | "other";
+
+/** The editorial pass a mapping represents. Free metadata, set by the author. */
+export type ReviewType =
+  | "copyedit"
+  | "proofread"
+  | "developmental"
+  | "technical"
+  | "legal"
+  | "other";
+
+export const PDF_ROLE_LABEL: Record<PdfRole, string> = {
+  annotated: "Annotated",
+  proof: "Proof",
+  clean: "Clean render",
+  stamped: "Stamped",
+  other: "Other",
+};
+
+export const REVIEW_TYPE_LABEL: Record<ReviewType, string> = {
+  copyedit: "Copyedit",
+  proofread: "Proofread",
+  developmental: "Developmental",
+  technical: "Technical review",
+  legal: "Legal read",
+  other: "Review",
+};
+
+/**
+ * One round of editing. A revision groups every mapping that came back from the
+ * same pass over the manuscript, however many editors contributed to it.
+ */
+export interface RevisionInfo {
+  /** Folder id, `rev-<ordinal>`. Unique per document. */
+  id: string;
+  /** 1-based round number, as authors count them. */
+  ordinal: number;
+  /** Human label for the round ("Copyedit round 2"). */
+  label?: string;
+  /** ISO-8601 date the round came back. */
+  receivedAt?: string;
+  /** Free-form note about the round. */
+  note?: string;
+}
+
+/**
+ * One annotated PDF mapped onto the source — the unit a sidecar file records.
+ * Several mappings can share a revision when the round came back from more than
+ * one place.
+ */
+export interface MappingInfo {
+  /** File-name stem of the sidecar; unique within its revision. */
+  id: string;
+  /** How this mapping was produced. */
+  kind: MappingKind;
+  /** Human label ("Acme copyedit"). Falls back to the id in the UI. */
+  label?: string;
+  /** Where the marks came from — the publisher, agency or site. */
+  origin?: string;
+  /** The person who made the marks, when known apart from the origin. */
+  reviewer?: string;
+  /** The editorial pass this mapping represents. */
+  reviewType?: ReviewType;
+  createdAt?: string;
+}
+
+/** Metadata about the PDF a mapping was built from. */
+export interface PdfInfo {
+  /** What kind of PDF this is. */
+  role: PdfRole;
+  /** True when the PDF was copied into the review folder for self-containment. */
+  imported?: boolean;
+  /** Where an imported PDF was copied from, for provenance. */
+  importedFrom?: string;
+}
+
+/** Kinds of file a mapping produces alongside its sidecar. */
+export type ArtifactKind =
+  | "report" // exported Markdown review report
+  | "stampedPdf" // a fresh render with the review written back into it
+  | "importedPdf" // the annotated PDF, copied in beside the mapping
+  | "extractedAdoc" // annotations dumped as standalone AsciiDoc
+  | "other";
+
+/** A file this mapping produced, recorded so the round stays self-describing. */
+export interface Artifact {
+  kind: ArtifactKind;
+  /** Absolute in memory; stored relative to the sidecar. */
+  path: string;
+  createdAt?: string;
+  note?: string;
+}
+
+/**
  * Content fingerprints of the inputs a session was built from. Cached in memory
  * when the files are read (load / re-map) and written into the sidecar so a
  * consumer can detect that the source or PDF changed since mapping ran. All
@@ -158,23 +269,54 @@ export interface SessionIntegrity {
 }
 
 /**
- * In-memory per-document review session. This is the domain model the UI,
- * matching and store operate on — paths are absolute and items are flat. It is
- * serialized to / from the portable on-disk standard by `model/format.ts`; the
- * sidecar file itself is NOT this shape (see `docs/FORMAT.md`).
+ * One mapping in memory: an annotated PDF, where its marks land in the source,
+ * and the review state over them. This is the domain model the UI, matching and
+ * store operate on — paths are absolute and items are flat. It is serialized to
+ * / from the portable on-disk standard by `model/format.ts`; the sidecar file
+ * itself is NOT this shape (see `docs/FORMAT.md`).
+ *
+ * A document has one session per mapping: several per revision when a round came
+ * back from several editors, and a fresh set for each new round. The sidecar
+ * path is the session's identity — an `.adoc` no longer maps to exactly one.
  */
 export interface ReviewSession {
   /** On-disk format version this session most recently round-tripped through. */
-  version: 1 | 2;
-  /** Absolute path to the source .adoc (the store key). */
+  version: 1 | 2 | 3;
+  /** Absolute path of this session's sidecar file — its unique identity. */
+  sidecarPath: string;
+  /** Absolute path to the source .adoc. */
   adocPath: string;
   /** Absolute path to the annotated PDF this session was built from. */
   pdfPath: string;
+  /** The editing round this mapping belongs to. */
+  revision: RevisionInfo;
+  /** What this mapping is and where it came from. */
+  mapping: MappingInfo;
+  /** What kind of PDF was mapped. */
+  pdf: PdfInfo;
   createdAt: string;
   updatedAt: string;
   /** Fingerprints of the inputs, when known. */
   integrity?: SessionIntegrity;
+  /** Files produced from this mapping (reports, stamped PDFs…). */
+  artifacts?: Artifact[];
   items: ReviewItem[];
+}
+
+/** Display name for a mapping: its label, else its origin, else its id. */
+export function mappingLabel(session: ReviewSession): string {
+  return (
+    session.mapping.label ||
+    session.mapping.origin ||
+    session.mapping.id ||
+    "review"
+  );
+}
+
+/** Display name for a revision: "Revision 2 — Copyedit" or just "Revision 2". */
+export function revisionLabel(rev: RevisionInfo): string {
+  const base = `Revision ${rev.ordinal}`;
+  return rev.label ? `${base} — ${rev.label}` : base;
 }
 
 export const KIND_LABEL: Record<AnnotationKind, string> = {

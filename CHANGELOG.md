@@ -5,11 +5,51 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Fits the real editing process. A manuscript goes through several rounds of
+edits, and one round often comes back as several annotated PDFs from several
+places at once — the model of "one `.adoc`, one sidecar, one PDF" could not hold
+any of that, and it put its files in the folder authors ship. Reviews are now
+rounds of mappings, stored outside the manuscript.
+
 Closes the review loop. Annotations used to be lost the moment the PDF was
 rebuilt — Asciidoctor has no concept of them — and there was nowhere to answer
 the editor. Now the review survives a rebuild, and replies are first-class.
 
 ### Added
+- **Revisions and mappings.** A document's review is now a set of *revisions*
+  (`rev-1`, `rev-2`, …), each holding one or more *mappings* — one per annotated
+  PDF. Two editors' marks on the same round are separate files with separate
+  review state, so neither overwrites the other. *Start New Review Round* and
+  *Add Annotated PDF to Current Round* are the two entry points; *Open PDF
+  Review* asks which round a PDF belongs to once a document has history.
+- **A review folder** — `eddieDoc.reviewFolder`, default `.eddie` at the
+  workspace root, with subfolders mirroring the manuscript tree. Mappings,
+  metadata, reports and intermediate PDFs live there instead of beside the
+  `.adoc`, so the folder an author delivers stays clean. Set it to an empty
+  string to keep the old layout.
+- **Round and mapping metadata**, editable with *Edit Round Details*: round
+  label, received date and note; the origin (publisher, agency, site), reviewer
+  and kind of review (`copyedit`, `proofread`, `developmental`, `technical`,
+  `legal`); and the kind of PDF mapped (`annotated`, `proof`, `clean`,
+  `stamped`) — a round involves several PDFs of one chapter and only an
+  annotated one carries marks. Sidecars also record the artifacts they produced
+  (reports, stamped PDFs).
+- **Round switching in the UI**: a *Rounds* group at the foot of the tree lists
+  every mapping with its progress and switches on click, *Switch Round /
+  Mapping* does the same from the palette, and the status bar and tree header
+  now name the round on screen (`chapter-01 ⇄ r2 · Acme Editorial`).
+- `eddieDoc.importPdfs` copies each annotated PDF into its round's `pdf/` folder
+  so a round stays readable after the download folder it arrived in is cleared;
+  `eddieDoc.stampOutput` and `eddieDoc.reportOutput` decide whether stamped PDFs
+  and exported reports go to the review folder or beside the source.
+- *Move Reviews into Review Folder* relocates sidecars still sitting beside a
+  manuscript, showing every `from → to` first and rewriting each file at its new
+  location so the relative paths inside stay correct.
+- **Review format version 3**: every sidecar now records its own `revision`,
+  `mapping`, `pdf.role` and `artifacts`, so a review's history reconstructs from
+  the files alone with no index to keep in sync. Items are byte-for-byte
+  unchanged from v2. Spec: [docs/FORMAT.md](docs/FORMAT.md); schema:
+  [schema/review-v3.schema.json](schema/review-v3.schema.json).
 - **Stamp the review onto a fresh render** — `eddie-doc stamp` (and
   *Eddie Doc: Stamp Reviewed PDF*) writes the editor's marks and your replies
   into a newly generated PDF as real PDF annotations, producing

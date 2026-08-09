@@ -61,7 +61,9 @@ export class ReviewCommentController {
       this.rebuild(adocPath);
       return;
     }
-    for (const session of this.store.all()) this.rebuild(session.adocPath);
+    // Once per document, not once per mapping: a document with three rounds
+    // still shows one thread per annotation, from the round on screen.
+    for (const doc of this.store.documents()) this.rebuild(doc);
   }
 
   private rebuild(adocPath: string): void {

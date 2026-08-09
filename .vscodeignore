@@ -10,6 +10,7 @@ out/**
 .git/**
 .omc/**
 .mocharc.json
+scripts/**
 **/*.vsix
 media/icon-marketplace.svg
 RELEASE_NOTES_*.md

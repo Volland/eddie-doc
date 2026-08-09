@@ -1,18 +1,37 @@
 # Eddie Doc Review Format
 
-**Version 2** · media type (proposed) `application/vnd.eddie-doc.review+json` ·
-schema: [`schema/review-v2.schema.json`](../schema/review-v2.schema.json) ·
-canonical URL: <https://volland.github.io/eddie-doc/schema/review-v2.schema.json>
+**Version 3** · media type (proposed) `application/vnd.eddie-doc.review+json` ·
+schema: [`schema/review-v3.schema.json`](../schema/review-v3.schema.json) ·
+canonical URL: <https://volland.github.io/eddie-doc/schema/review-v3.schema.json>
 
 The **review sidecar** is the durable artifact Eddie Doc produces: a
-`<file>.review.json` next to your `.adoc` that records every editor annotation
-recovered from an annotated PDF, where each maps into the source, and your
-review state. It is designed to be **committed to version control**, **diffed**,
-and **read by tools other than the VS Code extension** (a CLI, CI gate, or a
-different editor).
+`<mapping>.review.json` recording every editor annotation recovered from one
+annotated PDF, where each maps into the AsciiDoc source, and your review state.
+It is designed to be **committed to version control**, **diffed**, and **read by
+tools other than the VS Code extension** (a CLI, CI gate, or a different editor).
 
 This document is the normative spec. The JSON Schema is authoritative for
 structure; where prose and schema disagree, the schema wins.
+
+## The unit: one file per mapping
+
+A manuscript is edited over several **revisions** (rounds), and a round can come
+back as more than one annotated PDF — different copy editors, different sites.
+Each PDF mapped onto a source is one **mapping**, and one mapping is one file:
+
+```text
+.eddie/manuscript/chapter-01/
+  rev-1/
+    acme-copyedit.review.json       ← round 1, Acme's marks
+  rev-2/
+    acme-copyedit.review.json       ← round 2, same editor
+    beta-proofread.review.json      ← round 2, a second reviewer
+```
+
+Nothing outside the files themselves records this structure: every sidecar names
+its own `revision` and `mapping`, so a consumer reconstructs the whole review
+history by reading the files it finds — in any layout, including all of them in
+one directory. Where Eddie Doc puts them is a setting, not part of the format.
 
 ## Design goals
 
@@ -23,20 +42,28 @@ structure; where prose and schema disagree, the schema wins.
 3. **Layered** — each item separates what came *from the PDF* (immutable), what
    the *matcher computed* (a recomputable cache), and what the *user owns*
    (review state). Only the last is hand-edited; the first two are regenerated.
-4. **Evolvable** — a top-level integer `version` and a `$schema` URL, so
+4. **Self-describing** — a file states which round and whose marks it holds, and
+   what kind of PDF produced it, so a pile of sidecars needs no index to be
+   understood.
+5. **Evolvable** — a top-level integer `version` and a `$schema` URL, so
    consumers can branch on format and validate.
 
 ## Top-level shape
 
 ```jsonc
 {
-  "$schema": "https://volland.github.io/eddie-doc/schema/review-v2.schema.json",
-  "version": 2,
-  "producer": { "name": "eddie-doc", "version": "0.1.5" },
+  "$schema": "https://volland.github.io/eddie-doc/schema/review-v3.schema.json",
+  "version": 3,
+  "producer": { "name": "eddie-doc", "version": "1.1.0" },
   "createdAt": "2026-07-03T07:15:17.937Z",
   "updatedAt": "2026-07-12T09:02:00.000Z",
-  "source": { "path": "chapter-01.adoc", "sha256": "…", "bytes": 4213 },
-  "pdf":    { "path": "chapter-01.annotated.pdf", "sha256": "…", "annotationCount": 5 },
+  "revision": { "id": "rev-2", "ordinal": 2, "label": "Copyedit", "receivedAt": "2026-07-02" },
+  "mapping":  { "id": "acme-copyedit", "kind": "annotations",
+                "origin": "Acme Editorial", "reviewType": "copyedit" },
+  "source": { "path": "../../../manuscript/chapter-01.adoc", "sha256": "…", "bytes": 4213 },
+  "pdf":    { "path": "pdf/acme-copyedit.pdf", "sha256": "…",
+              "annotationCount": 5, "role": "annotated" },
+  "artifacts": [ { "kind": "report", "path": "acme-copyedit.review.md" } ],
   "items":  [ /* … */ ]
 }
 ```
@@ -44,31 +71,109 @@ structure; where prose and schema disagree, the schema wins.
 | Field | Req | Meaning |
 | --- | :-: | --- |
 | `$schema` | – | Format identifier; also the canonical schema URL. |
-| `version` | ✓ | On-disk format version. `2` for this spec. |
+| `version` | ✓ | On-disk format version. `3` for this spec. |
 | `producer` | – | Tool that wrote the file (`name`, optional `version`). |
 | `createdAt` / `updatedAt` | ✓ | ISO-8601 timestamps. |
+| `revision` | ✓ | The editing round this mapping belongs to. |
+| `mapping` | ✓ | What this mapping is and where its marks came from. |
 | `source` | ✓ | The `.adoc` input — see [File references](#file-references). |
-| `pdf` | ✓ | The annotated PDF input, plus `annotationCount`. |
+| `pdf` | ✓ | The PDF input, plus `annotationCount` and `role`. |
+| `artifacts` | – | Files produced from this mapping (reports, stamped PDFs). |
 | `items` | ✓ | The review items — see [Items](#items). |
+
+### `revision` — the editing round
+
+```jsonc
+{ "id": "rev-2", "ordinal": 2, "label": "Copyedit", "receivedAt": "2026-07-02",
+  "note": "second pass, structure only" }
+```
+
+| Field | Req | Meaning |
+| --- | :-: | --- |
+| `id` | ✓ | `rev-<ordinal>`. Unique per document; also the folder name. |
+| `ordinal` | ✓ | **1-based** round number, as authors count them. |
+| `label` | – | Human name for the round. |
+| `receivedAt` | – | ISO-8601 date (or date-time) the round came back. |
+| `note` | – | Free-form note about the round. |
+
+Every mapping of the same round carries the **same** revision block. Two files
+that disagree about a round are a producer bug; a consumer should prefer the one
+with the later `updatedAt`.
+
+### `mapping` — whose marks these are
+
+```jsonc
+{ "id": "acme-copyedit", "kind": "annotations", "label": "Acme copyedit",
+  "origin": "Acme Editorial", "reviewer": "R. Hale", "reviewType": "copyedit" }
+```
+
+| Field | Req | Meaning |
+| --- | :-: | --- |
+| `id` | ✓ | Identity within the round; also the file-name stem. |
+| `kind` | ✓ | How the mapping was produced — see below. |
+| `label` | – | Human name. Falls back to `origin`, then `id`. |
+| `origin` | – | Where the marks came from: publisher, agency, site. |
+| `reviewer` | – | The person who made them, when known apart from `origin`. |
+| `reviewType` | – | `copyedit`, `proofread`, `developmental`, `technical`, `legal`, `other`. |
+| `createdAt` | – | When the mapping was first made. |
+
+**`kind`** says what kind of mapping file this is:
+
+| Kind | Meaning |
+| --- | --- |
+| `annotations` | PDF annotations extracted and matched onto the source. What Eddie Doc writes today. |
+| `manual` | Links made by hand, with no annotation source. |
+| `other` | Anything else a producer defines. |
 
 ### File references
 
 Both `source` and `pdf` are **file references**:
 
 ```jsonc
-{ "path": "chapter-01.adoc", "sha256": "e3b0c4…", "bytes": 4213 }
+{ "path": "../../../manuscript/chapter-01.adoc", "sha256": "e3b0c4…", "bytes": 4213 }
 ```
 
 - **`path`** — relative to the **sidecar's own directory**, always with POSIX
   (`/`) separators, even on Windows. Consumers resolve it against the directory
-  the sidecar lives in. (Eddie Doc always binds the sidecar to the `.adoc` it
-  was opened next to; `source.path` is informational and normally `"<name>.adoc"`.)
+  the sidecar lives in. Since a sidecar no longer has to sit beside its
+  manuscript, `source.path` is **load-bearing**: it is how a consumer finds the
+  document a sidecar describes.
 - **`sha256`** — hex SHA-256 of the file's bytes at the time mapping last ran.
   Optional (a session migrated from v1 has none until it re-maps). When present,
   a consumer can compare it against the current file to decide whether the
   matches are stale.
-- **`bytes`** — size at map time. `pdf` additionally carries **`annotationCount`**,
-  a cheap staleness signal.
+- **`bytes`** — size at map time.
+
+**`pdf`** carries three more fields:
+
+| Field | Req | Meaning |
+| --- | :-: | --- |
+| `annotationCount` | – | Annotations extracted — a cheap staleness signal. |
+| `role` | – | What kind of PDF this is. Absent means `annotated`. |
+| `imported` | – | True when the PDF was copied in beside the sidecar. |
+| `importedFrom` | – | Where an imported PDF came from, relative to the sidecar. |
+
+**`role`** matters because a round involves several PDFs of the same chapter and
+they are not interchangeable:
+
+| Role | Meaning |
+| --- | --- |
+| `annotated` | Came back from an editor with marks on it. The only kind with marks to map. |
+| `proof` | A proofing copy; marks optional. |
+| `clean` | A fresh render carrying no review markup — what gets stamped. |
+| `stamped` | An Eddie Doc output carrying marks and replies. |
+| `other` | Anything else. |
+
+### `artifacts` — what this mapping produced
+
+```jsonc
+[ { "kind": "report", "path": "acme-copyedit.review.md",
+    "createdAt": "2026-07-12T09:10:00.000Z" } ]
+```
+
+`kind` is one of `report`, `stampedPdf`, `importedPdf`, `extractedAdoc`,
+`other`; `path` is relative to the sidecar. The list is a record, not a
+dependency: deleting an artifact does not invalidate the mapping.
 
 ## Items
 
@@ -226,20 +331,34 @@ reattaches state when a re-exported PDF re-keys every annotation id.
 
 ## Compatibility & migration
 
-- **Reading:** a consumer branches on `version`. Eddie Doc reads both `1` and
-  `2`. Unknown top-level fields should be ignored, not rejected.
+- **Reading:** a consumer branches on `version`. Eddie Doc reads `1`, `2` and
+  `3`. Unknown top-level fields should be ignored, not rejected.
 - **v1 → v2:** version 1 was a flat shape with absolute `adocPath`/`pdfPath` and
-  item fields at the top level. Eddie Doc migrates a v1 sidecar transparently on
-  load; the **next write upgrades the file to v2** (paths relativized,
-  fingerprints filled on the next re-map). No user action required.
+  item fields at the top level. Eddie Doc migrates it transparently on load.
+- **v2 → v3:** version 2 assumed one sidecar per `.adoc`, so it had nowhere to
+  say which round it was or whose marks it held. A v2 file is read as **the sole
+  mapping of the document's first round** (`rev-1`), named after its own file
+  stem — which is exactly how authors have been reading it. Nothing is lost and
+  no user action is required; the next write upgrades the file in place, where
+  it already sits. Moving it into the review folder is a separate, explicit
+  command (**Move Reviews into Review Folder**), because moving a checked-in file
+  is a decision, not a side effect.
+- **Items are unchanged** from v2 to v3: `annotation`, `anchor`, `match` and
+  `state` are byte-for-byte the same shape. A tool that only reads items needs no
+  changes beyond accepting the new `version`.
 - **Forward changes:** additive fields do not bump `version`. A breaking change
-  to existing fields bumps it to `3`.
+  to existing fields bumps it to `4`.
 
 ## Validating a sidecar
 
 ```bash
 # any JSON Schema validator, e.g. ajv-cli
-npx ajv-cli validate -s schema/review-v2.schema.json -d path/to/chapter-01.review.json
+npx ajv-cli validate --spec=draft2020 --strict=false \
+  -s schema/review-v3.schema.json -d path/to/acme-copyedit.review.json
+
+# every mapping in the project at once
+npx ajv-cli validate --spec=draft2020 --strict=false \
+  -s schema/review-v3.schema.json -d ".eddie/**/*.review.json"
 ```
 
 ## Relationship to the W3C Web Annotation model

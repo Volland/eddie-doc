@@ -18,9 +18,13 @@ function item(id: string, over: Partial<ReviewItem>): ReviewItem {
 
 function session(items: ReviewItem[]): ReviewSession {
   return {
-    version: 2,
+    version: 3,
+    sidecarPath: "/book/.eddie/chapter-01/rev-1/chapter-01.review.json",
     adocPath: "/book/chapter-01.adoc",
     pdfPath: "/book/chapter-01.annotated.pdf",
+    revision: { id: "rev-1", ordinal: 1 },
+    mapping: { id: "chapter-01", kind: "annotations" },
+    pdf: { role: "annotated" },
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
     items,

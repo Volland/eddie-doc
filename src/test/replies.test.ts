@@ -31,9 +31,13 @@ function sessionWith(replies: Reply[] | undefined): ReviewSession {
     replies,
   };
   return {
-    version: 2,
+    version: 3,
+    sidecarPath: SIDECAR,
     adocPath: "/proj/book/chapter-01.adoc",
     pdfPath: "/proj/book/chapter-01.annotated.pdf",
+    revision: { id: "rev-1", ordinal: 1 },
+    mapping: { id: "chapter-01", kind: "annotations" },
+    pdf: { role: "annotated" },
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-07T00:00:00.000Z",
     items: [item],

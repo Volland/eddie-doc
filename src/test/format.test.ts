@@ -1,6 +1,7 @@
 import * as assert from "node:assert";
 import {
   parse,
+  resolveSourcePath,
   serialize,
   toDocument,
   sha256,
@@ -12,9 +13,19 @@ const SIDECAR = "/proj/book/chapter-01.review.json";
 
 function sampleSession(): ReviewSession {
   return {
-    version: 2,
+    version: 3,
+    sidecarPath: SIDECAR,
     adocPath: "/proj/book/chapter-01.adoc",
     pdfPath: "/proj/book/chapter-01.annotated.pdf",
+    revision: { id: "rev-2", ordinal: 2, label: "Copyedit", receivedAt: "2026-07-02" },
+    mapping: {
+      id: "acme-copyedit",
+      kind: "annotations",
+      label: "Acme copyedit",
+      origin: "Acme Editorial",
+      reviewType: "copyedit",
+    },
+    pdf: { role: "annotated" },
     createdAt: "2026-07-03T07:15:17.937Z",
     updatedAt: "2026-07-12T09:00:00.000Z",
     integrity: {
@@ -60,10 +71,10 @@ function sampleSession(): ReviewSession {
 }
 
 describe("review format", () => {
-  it("serializes to the nested v2 document with a $schema and version", () => {
+  it("serializes to the nested v3 document with a $schema and version", () => {
     const doc = toDocument(sampleSession(), SIDECAR);
-    assert.strictEqual(doc.version, 2);
-    assert.ok(doc.$schema && doc.$schema.includes("review-v2"));
+    assert.strictEqual(doc.version, 3);
+    assert.ok(doc.$schema && doc.$schema.includes("review-v3"));
     // Nested item shape.
     const it = doc.items[0];
     assert.strictEqual(it.annotation.kind, "highlight");
@@ -105,6 +116,77 @@ describe("review format", () => {
     assert.deepStrictEqual(after!.integrity, before.integrity);
   });
 
+  it("round-trips the round, mapping and PDF-role metadata", () => {
+    const before = sampleSession();
+    const doc = toDocument(before, SIDECAR);
+    assert.strictEqual(doc.revision.id, "rev-2");
+    assert.strictEqual(doc.revision.ordinal, 2);
+    assert.strictEqual(doc.revision.label, "Copyedit");
+    assert.strictEqual(doc.mapping.id, "acme-copyedit");
+    assert.strictEqual(doc.mapping.origin, "Acme Editorial");
+    assert.strictEqual(doc.mapping.reviewType, "copyedit");
+    assert.strictEqual(doc.pdf.role, "annotated");
+
+    const after = parse(serialize(before, SIDECAR), SIDECAR, before.adocPath);
+    assert.ok(after);
+    assert.deepStrictEqual(after!.revision, before.revision);
+    assert.strictEqual(after!.mapping.origin, "Acme Editorial");
+    assert.strictEqual(after!.pdf.role, "annotated");
+  });
+
+  it("records produced artifacts relative to the sidecar", () => {
+    const before = sampleSession();
+    before.artifacts = [
+      {
+        kind: "report",
+        path: "/proj/book/.eddie/chapter-01/rev-2/acme-copyedit.review.md",
+        createdAt: "2026-07-12T09:10:00.000Z",
+      },
+    ];
+    const text = serialize(before, SIDECAR);
+    assert.ok(!text.includes("/proj/"), "no absolute path may leak");
+    const after = parse(text, SIDECAR, before.adocPath);
+    assert.strictEqual(after!.artifacts?.length, 1);
+    assert.strictEqual(after!.artifacts![0].kind, "report");
+    assert.strictEqual(
+      after!.artifacts![0].path,
+      "/proj/book/.eddie/chapter-01/rev-2/acme-copyedit.review.md"
+    );
+  });
+
+  it("reads the source path a sidecar records, for workspace discovery", () => {
+    const text = serialize(sampleSession(), SIDECAR);
+    assert.strictEqual(
+      resolveSourcePath(text, SIDECAR),
+      "/proj/book/chapter-01.adoc"
+    );
+    assert.strictEqual(resolveSourcePath("{ not json", SIDECAR), undefined);
+  });
+
+  it("treats a v2 sidecar as the sole mapping of the first round", () => {
+    const v2 = JSON.stringify({
+      version: 2,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      source: { path: "chapter-01.adoc" },
+      pdf: { path: "chapter-01.annotated.pdf", annotationCount: 1 },
+      items: [],
+    });
+    const session = parse(v2, SIDECAR, "/proj/book/chapter-01.adoc");
+    assert.ok(session);
+    assert.strictEqual(session!.version, 2); // loaded as v2…
+    assert.strictEqual(session!.revision.id, "rev-1");
+    assert.strictEqual(session!.revision.ordinal, 1);
+    // …named after its own file, which is how the author has been reading it.
+    assert.strictEqual(session!.mapping.id, "chapter-01");
+    assert.strictEqual(session!.mapping.kind, "annotations");
+    assert.strictEqual(session!.pdf.role, "annotated");
+    // …and the next write upgrades it in place.
+    const doc = toDocument({ ...session!, version: 3 }, SIDECAR);
+    assert.strictEqual(doc.version, 3);
+    assert.strictEqual(doc.revision.ordinal, 1);
+  });
+
   it("migrates a legacy v1 sidecar and drops absolute paths on rewrite", () => {
     const v1 = JSON.stringify({
       version: 1,
@@ -129,10 +211,12 @@ describe("review format", () => {
     assert.ok(session);
     assert.strictEqual(session!.version, 1); // loaded as v1…
     assert.strictEqual(session!.items[0].resolved, true);
-    // …and re-serializing upgrades it to a portable v2 doc.
-    const doc = toDocument({ ...session!, version: 2 }, SIDECAR);
-    assert.strictEqual(doc.version, 2);
+    // …and re-serializing upgrades it to a portable v3 doc, in the first round.
+    const doc = toDocument({ ...session!, version: 3 }, SIDECAR);
+    assert.strictEqual(doc.version, 3);
     assert.strictEqual(doc.pdf.path, "chapter-01.annotated.pdf");
+    assert.strictEqual(doc.revision.ordinal, 1);
+    assert.strictEqual(doc.mapping.id, "chapter-01");
   });
 
   it("returns null for corrupt or unknown input", () => {
@@ -238,7 +322,7 @@ describe("review format", () => {
     assert.strictEqual(session!.items[0].replies, undefined);
     assert.strictEqual(session!.items[0].anchor, undefined);
     // And upgrading it writes a valid v2 item without empty blocks.
-    const doc = toDocument({ ...session!, version: 2 }, SIDECAR);
+    const doc = toDocument({ ...session!, version: 3 }, SIDECAR);
     assert.ok(!("anchor" in doc.items[0]));
   });
 

@@ -1,23 +1,39 @@
 import * as vscode from "vscode";
 import type { ReviewItem, ReviewSession } from "../model/types.js";
-import { KIND_ICON, KIND_LABEL } from "../model/types.js";
+import {
+  KIND_ICON,
+  KIND_LABEL,
+  PDF_ROLE_LABEL,
+  REVIEW_TYPE_LABEL,
+  mappingLabel,
+  revisionLabel,
+} from "../model/types.js";
 import { effectiveLine } from "../matching/mapper.js";
 import type { ReviewStore } from "../model/store.js";
 
-type Node = GroupNode | ItemNode;
+type Node = GroupNode | ItemNode | MappingNode;
 
 interface GroupNode {
   type: "group";
   label: string;
-  children: ItemNode[];
+  children: Node[];
   /** Tree contextValue, so group-specific inline actions can be targeted. */
   context?: string;
+  /** Groups of rounds start collapsed; the working groups stay open. */
+  collapsed?: boolean;
 }
 
 interface ItemNode {
   type: "item";
   item: ReviewItem;
   adocPath: string;
+}
+
+/** One of the document's other mappings — a click switches the view to it. */
+interface MappingNode {
+  type: "mapping";
+  session: ReviewSession;
+  active: boolean;
 }
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
@@ -87,6 +103,24 @@ export class AnnotationTreeProvider
         "group.unmatched"
       );
       add(`Resolved (${done.length})`, toItems(done, session.adocPath));
+
+      // A document reviewed over several rounds gets its other mappings listed
+      // at the bottom, so switching between them never needs the command
+      // palette. One mapping means there is nothing to switch to — no group.
+      const siblings = this.store.sessionsFor(session.adocPath);
+      if (siblings.length > 1) {
+        groups.push({
+          type: "group",
+          label: `Rounds (${this.store.revisionsFor(session.adocPath).length})`,
+          context: "group.revisions",
+          collapsed: true,
+          children: siblings.map((s) => ({
+            type: "mapping" as const,
+            session: s,
+            active: s.sidecarPath === session.sidecarPath,
+          })),
+        });
+      }
       return groups;
     }
 
@@ -98,11 +132,15 @@ export class AnnotationTreeProvider
     if (node.type === "group") {
       const ti = new vscode.TreeItem(
         node.label,
-        vscode.TreeItemCollapsibleState.Expanded
+        node.collapsed
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.Expanded
       );
       ti.contextValue = node.context ?? "group";
       return ti;
     }
+
+    if (node.type === "mapping") return mappingTreeItem(node);
 
     const { item } = node;
     const line = effectiveLine(item);
@@ -139,6 +177,50 @@ export class AnnotationTreeProvider
 
 function toItems(items: ReviewItem[], adocPath: string): ItemNode[] {
   return items.map((item) => ({ type: "item", item, adocPath }));
+}
+
+/** A row for one of the document's mappings: which round, whose marks, progress. */
+function mappingTreeItem(node: MappingNode): vscode.TreeItem {
+  const { session, active } = node;
+  const ti = new vscode.TreeItem(
+    `${revisionLabel(session.revision)} · ${mappingLabel(session)}`,
+    vscode.TreeItemCollapsibleState.None
+  );
+  ti.id = `mapping:${session.sidecarPath}`;
+  ti.contextValue = active ? "mapping.active" : "mapping";
+  ti.iconPath = new vscode.ThemeIcon(active ? "circle-filled" : "circle-outline");
+  const open = session.items.filter((i) => !i.resolved).length;
+  ti.description = `${open} open / ${session.items.length}${
+    active ? " · showing" : ""
+  }`;
+  ti.tooltip = mappingTooltip(session);
+  if (!active) {
+    ti.command = {
+      command: "eddieDoc.activateMapping",
+      title: "Show this round",
+      arguments: [session.sidecarPath],
+    };
+  }
+  return ti;
+}
+
+function mappingTooltip(session: ReviewSession): vscode.MarkdownString {
+  const md = new vscode.MarkdownString();
+  md.appendMarkdown(`**${revisionLabel(session.revision)}**\n\n`);
+  const rows: string[] = [`- Mapping: \`${session.mapping.id}\``];
+  if (session.mapping.origin) rows.push(`- From: ${session.mapping.origin}`);
+  if (session.mapping.reviewer) rows.push(`- Reviewer: ${session.mapping.reviewer}`);
+  if (session.mapping.reviewType)
+    rows.push(`- Pass: ${REVIEW_TYPE_LABEL[session.mapping.reviewType]}`);
+  rows.push(
+    `- PDF: ${PDF_ROLE_LABEL[session.pdf?.role ?? "annotated"]}` +
+      (session.pdf?.imported ? " (imported)" : "")
+  );
+  if (session.revision.receivedAt)
+    rows.push(`- Received: ${session.revision.receivedAt.slice(0, 10)}`);
+  if (session.revision.note) rows.push(`- Note: ${session.revision.note}`);
+  md.appendMarkdown(rows.join("\n"));
+  return md;
 }
 
 /** A link we trust: hand-picked, confirmed, or a high-confidence auto-match. */

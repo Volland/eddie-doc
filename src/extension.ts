@@ -13,8 +13,29 @@ import {
   topMatches,
   type Candidate,
 } from "./matching/fuzzyMatch.js";
-import type { ReviewItem } from "./model/types.js";
-import { KIND_LABEL } from "./model/types.js";
+import type {
+  MappingInfo,
+  PdfRole,
+  ReviewItem,
+  ReviewSession,
+  ReviewType,
+  RevisionInfo,
+} from "./model/types.js";
+import {
+  KIND_LABEL,
+  PDF_ROLE_LABEL,
+  REVIEW_TYPE_LABEL,
+  mappingLabel,
+  revisionLabel,
+} from "./model/types.js";
+import {
+  DEFAULT_REVIEW_FOLDER,
+  documentFolder,
+  mappingReportPath,
+  pdfFolder,
+  type LayoutConfig,
+} from "./model/layout.js";
+import { resolveSourcePath } from "./model/format.js";
 import { countNewlines, type ContentChange } from "./matching/posTrack.js";
 import { isAdocDoc, isAdocPath } from "./util.js";
 import { resolveMarkedRange, resolveInsertPosition } from "./ui/precise.js";
@@ -38,6 +59,53 @@ function threshold(): number {
     .get<number>("matchThreshold", 0.5);
 }
 
+/**
+ * Where review artifacts live, from settings. An empty `reviewFolder` selects
+ * the historical layout (sidecar beside the manuscript); the default keeps the
+ * manuscript folder clean by putting everything under `.eddie/`.
+ */
+function layoutConfig(): LayoutConfig {
+  return {
+    workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    reviewFolder: vscode.workspace
+      .getConfiguration("eddieDoc")
+      .get<string>("reviewFolder", DEFAULT_REVIEW_FOLDER),
+  };
+}
+
+/** True when the annotated PDF should be copied in beside its mapping. */
+function importPdfs(): boolean {
+  return vscode.workspace
+    .getConfiguration("eddieDoc")
+    .get<boolean>("importPdfs", false);
+}
+
+/**
+ * Resolve where a generated file belongs: inside the mapping's revision folder,
+ * or beside `fallback` when the setting says so or there is no review folder.
+ */
+function outputPath(
+  store: ReviewStore,
+  session: ReviewSession,
+  setting: "stampOutput" | "reportOutput",
+  fallback: string,
+  kind: "pdf" | "report"
+): string {
+  const mode = vscode.workspace
+    .getConfiguration("eddieDoc")
+    .get<string>(setting, "reviewFolder");
+  if (mode !== "reviewFolder") return fallback;
+  const folder = documentFolder(store.layoutConfig, session.adocPath);
+  if (!folder) return fallback;
+  if (kind === "report") {
+    return mappingReportPath(folder, session.revision.id, session.mapping.id);
+  }
+  return path.join(
+    pdfFolder(folder, session.revision.id),
+    path.basename(fallback)
+  );
+}
+
 function activeAdocPath(): string | undefined {
   const ed = vscode.window.activeTextEditor;
   if (ed && isAdocDoc(ed.document)) return ed.document.uri.fsPath;
@@ -58,6 +126,7 @@ function resolveTargetAdoc(store: ReviewStore): string | undefined {
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new ReviewStore();
+  store.configure(layoutConfig());
   // Embeddings for the semantic fallback survive restarts in global storage.
   store.useEmbedCacheFile(
     path.join(context.globalStorageUri.fsPath, "embed-cache.json")
@@ -71,9 +140,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // (the tree, a PDF, settings…) we keep showing this pair rather than jumping
   // to whichever review was most recently edited.
   let lastAdoc: string | undefined = activeAdocPath();
-  // Which pair the PDF preview is currently following, so we only re-point it
-  // when the active pair actually changes (not on every store mutation).
-  let previewedAdoc: string | undefined;
+  // Which mapping the PDF preview is currently following, so we only re-point it
+  // when the shown mapping actually changes (not on every store mutation).
+  // Keyed by sidecar, not document: switching rounds swaps the PDF too.
+  let previewedMapping: string | undefined;
 
   // The pair the whole UI is bound to: the live active editor if it's an .adoc,
   // otherwise the last one we saw.
@@ -94,10 +164,10 @@ export function activate(context: vscode.ExtensionContext): void {
   pairStatus.command = "eddieDoc.switchReview";
   context.subscriptions.push(pairStatus);
 
-  /** Show `id`'s PDF region and remember which pair the preview now follows. */
+  /** Show `id`'s PDF region and remember which mapping the preview follows. */
   const showPreview = (adocPath: string, id: string): void => {
     previewItem(store, preview, adocPath, id);
-    previewedAdoc = adocPath;
+    previewedMapping = store.get(adocPath)?.sidecarPath;
   };
 
   // Once the preview panel is open, follow the tree selection so browsing the
@@ -142,20 +212,31 @@ export function activate(context: vscode.ExtensionContext): void {
     const pdfName = session?.pdfPath ? path.basename(session.pdfPath) : "";
     const pdfMissing =
       !!session?.pdfPath && !fs.existsSync(session.pdfPath);
+    // With rounds in play, the mapping matters more than the PDF's file name:
+    // "rev-2 · acme" is what tells the author which marks they are looking at.
+    const round = session
+      ? `r${session.revision.ordinal} · ${mappingLabel(session)}`
+      : "";
     treeView.description = session
-      ? `${path.basename(session.adocPath)} ⇄ ${pdfName}${pdfMissing ? " (missing)" : ""}`
+      ? `${path.basename(session.adocPath)} ⇄ ${round}${pdfMissing ? " (PDF missing)" : ""}`
       : undefined;
     if (session && adoc) {
       const open = session.items.filter((i) => !i.resolved).length;
+      const siblings = store.sessionsFor(adoc);
       pairStatus.text = `$(comment-discussion) ${path.basename(
         session.adocPath
-      )} ⇄ ${pdfName}${pdfMissing ? " $(warning)" : ""}`;
+      )} ⇄ ${round}${pdfMissing ? " $(warning)" : ""}`;
       pairStatus.tooltip =
-        `Eddie Doc: ${session.items.length} annotation(s), ${open} open` +
-        (pdfMissing
-          ? ` — PDF not found at ${session.pdfPath}`
+        `Eddie Doc — ${revisionLabel(session.revision)} · ${mappingLabel(session)}\n` +
+        `${session.items.length} annotation(s), ${open} open\n` +
+        `PDF: ${pdfName} (${PDF_ROLE_LABEL[session.pdf?.role ?? "annotated"]})` +
+        (pdfMissing ? ` — NOT FOUND at ${session.pdfPath}` : "") +
+        (siblings.length > 1
+          ? `\n${siblings.length} mappings across ${
+              store.revisionsFor(adoc).length
+            } round(s)`
           : "") +
-        `\nClick to switch to another review.`;
+        `\nClick to switch review.`;
       pairStatus.show();
     } else {
       pairStatus.hide();
@@ -163,9 +244,20 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.commands.executeCommand(
       "setContext",
       "eddieDoc.hasMultipleReviews",
-      store.all().length > 1
+      store.documents().length > 1
     );
-    if (session && adoc && preview.isOpen && adoc !== previewedAdoc) {
+    // Only a document with more than one mapping has anything to switch between.
+    void vscode.commands.executeCommand(
+      "setContext",
+      "eddieDoc.hasRounds",
+      !!adoc && store.sessionsFor(adoc).length > 1
+    );
+    if (
+      session &&
+      adoc &&
+      preview.isOpen &&
+      session.sidecarPath !== previewedMapping
+    ) {
       const first = session.items[0];
       if (first) showPreview(adoc, first.id);
     }
@@ -190,13 +282,22 @@ export function activate(context: vscode.ExtensionContext): void {
       refreshUI();
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("eddieDoc")) refreshUI();
+      if (!e.affectsConfiguration("eddieDoc")) return;
+      // Moving the review folder changes where new mappings are written and
+      // where discovery looks; already-loaded ones keep their own paths.
+      store.configure(layoutConfig());
+      if (e.affectsConfiguration("eddieDoc.reviewFolder")) {
+        void loadWorkspaceSidecars(store).then(refreshUI);
+      }
+      refreshUI();
     }),
     // Re-map on save so annotation positions stay correct after edits (e.g.
     // after inserting a note line, which shifts everything below it).
     vscode.workspace.onDidSaveTextDocument(async (doc) => {
+      // Every round maps into the same text, so an edit invalidates all of
+      // them — re-map the lot, not just the one currently on screen.
       if (isAdocDoc(doc) && store.get(doc.uri.fsPath)) {
-        await store.remap(doc.uri.fsPath, threshold());
+        await store.remapAll(doc.uri.fsPath, threshold());
       }
     }),
     // Live position tracking: shift annotation anchors with the text as the user
@@ -225,80 +326,63 @@ export function activate(context: vscode.ExtensionContext): void {
   // ---- Commands -----------------------------------------------------------
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("eddieDoc.openReview", async (arg?: vscode.Uri) => {
-      let pair = await resolveReviewPair(store, arg);
-      if (!pair) return;
-      pair = await confirmPairSanity(pair);
-      if (!pair) return;
-      const { adocPath, pdfPath } = pair;
-
-      // Each .adoc owns exactly one sidecar bound to one PDF. Re-binding it to
-      // a different PDF replaces that review — never do it silently.
-      const existing = store.get(adocPath);
-      if (
-        existing?.pdfPath &&
-        path.resolve(existing.pdfPath) !== path.resolve(pdfPath)
-      ) {
-        const replace = `Replace with ${path.basename(pdfPath)}`;
-        const choice = await vscode.window.showWarningMessage(
-          `"${path.basename(adocPath)}" is already reviewed against ` +
-            `"${path.basename(existing.pdfPath)}". Replace that review with ` +
-            `"${path.basename(pdfPath)}"? Resolved state and notes carry ` +
-            `over to annotations with matching content.`,
-          { modal: true },
-          replace
-        );
-        if (choice !== replace) return;
+    vscode.commands.registerCommand(
+      "eddieDoc.openReview",
+      async (arg?: vscode.Uri) => {
+        await openReview(store, arg, "ask");
       }
+    ),
 
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "Eddie Doc: mapping PDF annotations…",
-        },
-        async () => {
-          try {
-            const session = await store.loadReview(
-              adocPath,
-              pdfPath,
-              threshold()
-            );
-            const matched = session.items.filter(
-              (i) => effectiveLine(i) !== UNMATCHED
-            ).length;
-            vscode.window.showInformationMessage(
-              `Eddie Doc: ${session.items.length} annotation(s), ${matched} mapped to source.`
-            );
-            // A mostly-unmatched review usually means the PDF belongs to a
-            // different source file — say so instead of leaving a dead tree.
-            if (
-              session.items.length >= 5 &&
-              matched / session.items.length < 0.4
-            ) {
-              vscode.window.showWarningMessage(
-                `Eddie Doc: only ${matched} of ${session.items.length} annotations mapped. ` +
-                  `Check that "${path.basename(pdfPath)}" is really the annotated PDF for ` +
-                  `"${path.basename(adocPath)}", then use Triage for the rest.`
-              );
-            }
-            // Bind the whole UI to the reviewed source (it may differ from the
-            // active editor when the pair was re-bound or launched from a PDF).
-            if (activeAdocPath() !== adocPath) {
-              await vscode.window.showTextDocument(
-                vscode.Uri.file(adocPath),
-                { preview: false }
-              );
-            }
-            await vscode.commands.executeCommand(
-              "eddieDoc.annotations.focus"
-            );
-          } catch (e) {
-            vscode.window.showErrorMessage(
-              `Eddie Doc: failed to read PDF — ${String(e)}`
-            );
-          }
+    // Explicit entry points for the two things "open a PDF" can mean once a
+    // document has history: another editor's marks on the round in progress, or
+    // the start of the next round.
+    vscode.commands.registerCommand("eddieDoc.addMapping", async () => {
+      await openReview(store, undefined, "current");
+    }),
+
+    vscode.commands.registerCommand("eddieDoc.newRevision", async () => {
+      await openReview(store, undefined, "new");
+    }),
+
+    // Show one of the document's other mappings (from the tree or the picker).
+    vscode.commands.registerCommand(
+      "eddieDoc.activateMapping",
+      async (arg?: unknown) => {
+        const sidecar = sidecarArg(arg);
+        if (!sidecar) return;
+        const session = store.getBySidecar(sidecar);
+        if (!session) return;
+        store.setActive(sidecar);
+        if (activeAdocPath() !== session.adocPath) {
+          const doc = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(session.adocPath)
+          );
+          await vscode.window.showTextDocument(doc, { preview: false });
         }
-      );
+      }
+    ),
+
+    // Walk the document's rounds and mappings, and switch to one.
+    vscode.commands.registerCommand("eddieDoc.switchMapping", async () => {
+      await switchMapping(store);
+    }),
+
+    // Metadata the sidecar carries about the round and the marks in it.
+    vscode.commands.registerCommand("eddieDoc.editMappingInfo", async (arg?: unknown) => {
+      await editMappingInfo(store, sidecarArg(arg));
+    }),
+
+    vscode.commands.registerCommand("eddieDoc.deleteMapping", async (arg?: unknown) => {
+      await deleteMapping(store, sidecarArg(arg));
+    }),
+
+    // Relocate sidecars that still sit beside the manuscript.
+    vscode.commands.registerCommand("eddieDoc.migrateReviews", async () => {
+      await migrateReviews(store);
+    }),
+
+    vscode.commands.registerCommand("eddieDoc.openReviewFolder", async () => {
+      await openReviewFolder(store);
     }),
 
     // Jump the whole UI (tree, editor, and — if open — the PDF preview) to
@@ -316,7 +400,14 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         return;
       }
-      await store.remap(adocPath, threshold());
+      const n = await store.remapAll(adocPath, threshold());
+      if (n > 1) {
+        vscode.window.showInformationMessage(
+          `Eddie Doc: re-mapped ${n} mappings across ${
+            store.revisionsFor(adocPath).length
+          } round(s).`
+        );
+      }
     }),
 
     vscode.commands.registerCommand(
@@ -511,8 +602,15 @@ export function activate(context: vscode.ExtensionContext): void {
         stale: isSessionStale(session),
         generatedAt: new Date().toISOString(),
       });
-      const outPath = adocPath.replace(/\.adoc$/i, "") + ".review.md";
+      const outPath = outputPath(
+        store,
+        session,
+        "reportOutput",
+        adocPath.replace(/\.adoc$/i, "") + ".review.md",
+        "report"
+      );
       try {
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
         fs.writeFileSync(outPath, md, "utf8");
       } catch (e) {
         vscode.window.showErrorMessage(
@@ -520,6 +618,11 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         return;
       }
+      store.recordArtifact(session.sidecarPath, {
+        kind: "report",
+        path: outPath,
+        createdAt: new Date().toISOString(),
+      });
       const doc = await vscode.workspace.openTextDocument(outPath);
       await vscode.window.showTextDocument(doc, { preview: true });
     })
@@ -645,12 +748,484 @@ async function confirmPairSanity(
     : pair;
 }
 
+// ---- Rounds and mappings --------------------------------------------------
+
+/**
+ * Which round a newly opened PDF joins.
+ *
+ * - `ask` — let the user say (only asked once the document has history).
+ * - `current` — another editor's marks on the round already in progress.
+ * - `new` — the next round.
+ */
+type OpenMode = "ask" | "current" | "new";
+
+/**
+ * Map an annotated PDF onto a source document as one mapping of one round.
+ *
+ * A document accumulates mappings: several per round when the marks came back
+ * from several places, and a fresh set each round. Everything the flow needs to
+ * know beyond the two files — which round, whose marks — is asked for only when
+ * the document already has history, so a first review is the same two clicks it
+ * always was.
+ */
+async function openReview(
+  store: ReviewStore,
+  arg: vscode.Uri | undefined,
+  mode: OpenMode
+): Promise<void> {
+  let pair = await resolveReviewPair(store, arg);
+  if (!pair) return;
+  pair = await confirmPairSanity(pair);
+  if (!pair) return;
+  const { adocPath, pdfPath } = pair;
+
+  // Know the document's full history before deciding what this PDF is part of.
+  store.tryLoadSidecar(adocPath);
+  const existing = store.sessionsFor(adocPath);
+
+  const revision = await chooseRevision(store, adocPath, mode, existing);
+  if (!revision) return;
+
+  // Re-opening the same PDF in the same round refreshes that mapping in place
+  // instead of leaving a second copy of it beside the first.
+  const rebind = existing.find(
+    (s) =>
+      s.revision.id === revision.id &&
+      s.pdfPath &&
+      (path.resolve(s.pdfPath) === path.resolve(pdfPath) ||
+        (s.pdf?.importedFrom &&
+          path.resolve(s.pdf.importedFrom) === path.resolve(pdfPath)))
+  );
+
+  const mapping = existing.length
+    ? await promptMappingMeta(pdfPath, rebind?.mapping)
+    : {};
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: rebind
+        ? "Eddie Doc: re-mapping PDF annotations…"
+        : "Eddie Doc: mapping PDF annotations…",
+    },
+    async () => {
+      try {
+        const session = await store.loadReview(adocPath, pdfPath, {
+          threshold: threshold(),
+          revision,
+          sidecarPath: rebind?.sidecarPath,
+          mapping,
+          pdfRole: rebind?.pdf?.role ?? "annotated",
+          importPdf: importPdfs(),
+        });
+        const matched = session.items.filter(
+          (i) => effectiveLine(i) !== UNMATCHED
+        ).length;
+        vscode.window.showInformationMessage(
+          `Eddie Doc: ${revisionLabel(session.revision)} · ${mappingLabel(
+            session
+          )} — ${session.items.length} annotation(s), ${matched} mapped to source.`
+        );
+        // A mostly-unmatched review usually means the PDF belongs to a
+        // different source file — say so instead of leaving a dead tree.
+        if (session.items.length >= 5 && matched / session.items.length < 0.4) {
+          vscode.window.showWarningMessage(
+            `Eddie Doc: only ${matched} of ${session.items.length} annotations mapped. ` +
+              `Check that "${path.basename(pdfPath)}" is really the annotated PDF for ` +
+              `"${path.basename(adocPath)}", then use Triage for the rest.`
+          );
+        }
+        // Bind the whole UI to the reviewed source (it may differ from the
+        // active editor when the pair was re-bound or launched from a PDF).
+        if (activeAdocPath() !== adocPath) {
+          await vscode.window.showTextDocument(vscode.Uri.file(adocPath), {
+            preview: false,
+          });
+        }
+        await vscode.commands.executeCommand("eddieDoc.annotations.focus");
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `Eddie Doc: failed to read PDF — ${String(e)}`
+        );
+      }
+    }
+  );
+}
+
+interface RevisionPick extends vscode.QuickPickItem {
+  revision: RevisionInfo;
+}
+
+/** Decide the round a PDF joins; undefined when the user backs out. */
+async function chooseRevision(
+  store: ReviewStore,
+  adocPath: string,
+  mode: OpenMode,
+  existing: ReviewSession[]
+): Promise<RevisionInfo | undefined> {
+  // Nothing to choose between on a document's first review.
+  if (!existing.length) return store.nextRevision(adocPath);
+  if (mode === "new") return store.nextRevision(adocPath);
+  if (mode === "current")
+    return store.latestRevision(adocPath) ?? store.nextRevision(adocPath);
+
+  const next = store.nextRevision(adocPath);
+  const picks: RevisionPick[] = [];
+  for (const rev of store.revisionsFor(adocPath).slice().reverse()) {
+    const inRound = existing.filter((s) => s.revision.id === rev.id);
+    picks.push({
+      label: `$(git-commit) ${revisionLabel(rev)}`,
+      description:
+        rev.ordinal === (store.latestRevision(adocPath)?.ordinal ?? 0)
+          ? "current round"
+          : "",
+      detail: `Add these marks alongside ${inRound
+        .map((s) => mappingLabel(s))
+        .join(", ")}`,
+      revision: rev,
+    });
+  }
+  picks.unshift({
+    label: `$(add) Start ${revisionLabel(next)}`,
+    detail:
+      "A new round of edits. Resolved state, notes and replies carry over " +
+      "from the previous round by annotation content.",
+    revision: next,
+  });
+
+  const chosen = await vscode.window.showQuickPick(picks, {
+    title: `Which round do these marks belong to? — ${path.basename(adocPath)}`,
+    placeHolder: "Start a new round, or add to one already open",
+  });
+  return chosen?.revision;
+}
+
+/**
+ * Ask who the marks came from. Deliberately skippable: Escape keeps the
+ * defaults and proceeds rather than throwing away the PDF the user just picked.
+ */
+async function promptMappingMeta(
+  pdfPath: string,
+  previous?: MappingInfo
+): Promise<Partial<MappingInfo>> {
+  const suggestion =
+    previous?.origin ??
+    path
+      .basename(pdfPath)
+      .replace(/\.pdf$/i, "")
+      .replace(/[._-]+/g, " ")
+      .trim();
+  const origin = await vscode.window.showInputBox({
+    title: "Where did these marks come from?",
+    prompt:
+      "Publisher, agency or reviewer — shown on the round in the sidebar. " +
+      "Press Escape to skip.",
+    value: suggestion,
+    valueSelection: [0, suggestion.length],
+  });
+  if (origin == null) return {};
+  const trimmed = origin.trim();
+  return trimmed ? { origin: trimmed, label: trimmed } : {};
+}
+
+interface MappingPick extends vscode.QuickPickItem {
+  sidecarPath?: string;
+}
+
+/** Switch the view between the rounds and mappings of the active document. */
+async function switchMapping(store: ReviewStore): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const sessions = adocPath ? store.sessionsFor(adocPath) : [];
+  if (!adocPath || !sessions.length) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: no review loaded for this document."
+    );
+    return;
+  }
+  const active = store.get(adocPath);
+  const picks: MappingPick[] = [];
+  let lastRevision = "";
+  for (const s of sessions.slice().reverse()) {
+    if (s.revision.id !== lastRevision) {
+      lastRevision = s.revision.id;
+      picks.push({
+        label: revisionLabel(s.revision),
+        kind: vscode.QuickPickItemKind.Separator,
+      });
+    }
+    const open = s.items.filter((i) => !i.resolved).length;
+    const matched = s.items.filter((i) => effectiveLine(i) !== UNMATCHED).length;
+    picks.push({
+      label: `${s.sidecarPath === active?.sidecarPath ? "$(circle-filled)" : "$(circle-outline)"} ${mappingLabel(s)}`,
+      description: `${matched}/${s.items.length} mapped · ${open} open · ${PDF_ROLE_LABEL[
+        s.pdf?.role ?? "annotated"
+      ].toLowerCase()} PDF`,
+      detail: s.mapping.reviewType
+        ? REVIEW_TYPE_LABEL[s.mapping.reviewType]
+        : undefined,
+      sidecarPath: s.sidecarPath,
+    });
+  }
+  const chosen = await vscode.window.showQuickPick(picks, {
+    title: `Rounds of ${path.basename(adocPath)}`,
+    placeHolder: "Choose the round / mapping to show",
+  });
+  if (!chosen?.sidecarPath) return;
+  await vscode.commands.executeCommand(
+    "eddieDoc.activateMapping",
+    chosen.sidecarPath
+  );
+}
+
+/**
+ * Edit the metadata a mapping carries: which round it is, who marked it up,
+ * what kind of pass it was, and what kind of PDF it came from. One field per
+ * pass through the picker, so the flow is escapable at every point.
+ */
+async function editMappingInfo(
+  store: ReviewStore,
+  sidecarPath?: string
+): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const session = sidecarPath
+    ? store.getBySidecar(sidecarPath)
+    : adocPath
+      ? store.get(adocPath)
+      : undefined;
+  if (!session) {
+    vscode.window.showInformationMessage("Eddie Doc: no review loaded.");
+    return;
+  }
+
+  interface FieldPick extends vscode.QuickPickItem {
+    field: string;
+  }
+  for (;;) {
+    const m = session.mapping;
+    const fields: FieldPick[] = [
+      {
+        field: "revisionLabel",
+        label: "$(git-commit) Round label",
+        description: session.revision.label ?? `Revision ${session.revision.ordinal}`,
+      },
+      {
+        field: "receivedAt",
+        label: "$(calendar) Received",
+        description: session.revision.receivedAt?.slice(0, 10) ?? "—",
+      },
+      { field: "origin", label: "$(organization) From", description: m.origin ?? "—" },
+      { field: "reviewer", label: "$(account) Reviewer", description: m.reviewer ?? "—" },
+      {
+        field: "reviewType",
+        label: "$(checklist) Kind of review",
+        description: m.reviewType ? REVIEW_TYPE_LABEL[m.reviewType] : "—",
+      },
+      {
+        field: "pdfRole",
+        label: "$(file-pdf) Kind of PDF",
+        description: PDF_ROLE_LABEL[session.pdf?.role ?? "annotated"],
+      },
+      {
+        field: "note",
+        label: "$(note) Round note",
+        description: session.revision.note ?? "—",
+      },
+    ];
+    const chosen = await vscode.window.showQuickPick(fields, {
+      title: `${revisionLabel(session.revision)} · ${mappingLabel(session)}`,
+      placeHolder: "Choose a field to edit — Escape when done",
+    });
+    if (!chosen) return;
+
+    if (chosen.field === "reviewType") {
+      const kinds = Object.entries(REVIEW_TYPE_LABEL).map(([value, label]) => ({
+        label,
+        value: value as ReviewType,
+      }));
+      const pick = await vscode.window.showQuickPick(kinds, {
+        title: "Kind of review",
+      });
+      if (pick) store.describeMapping(session.sidecarPath, { reviewType: pick.value });
+      continue;
+    }
+    if (chosen.field === "pdfRole") {
+      const roles = Object.entries(PDF_ROLE_LABEL).map(([value, label]) => ({
+        label,
+        value: value as PdfRole,
+        description:
+          value === "annotated"
+            ? "Came back from an editor with marks on it"
+            : value === "clean"
+              ? "A fresh render with no review markup"
+              : undefined,
+      }));
+      const pick = await vscode.window.showQuickPick(roles, {
+        title: "What kind of PDF is mapped?",
+      });
+      if (pick) store.describeMapping(session.sidecarPath, { pdfRole: pick.value });
+      continue;
+    }
+
+    const current =
+      chosen.field === "revisionLabel"
+        ? (session.revision.label ?? "")
+        : chosen.field === "receivedAt"
+          ? (session.revision.receivedAt?.slice(0, 10) ?? "")
+          : chosen.field === "note"
+            ? (session.revision.note ?? "")
+            : ((session.mapping as unknown as Record<string, unknown>)[
+                chosen.field
+              ] as string | undefined) ?? "";
+    const value = await vscode.window.showInputBox({
+      title: chosen.label.replace(/^\$\([a-z-]+\)\s*/, ""),
+      value: current,
+      prompt:
+        chosen.field === "receivedAt"
+          ? "Date the round came back, as YYYY-MM-DD"
+          : undefined,
+    });
+    if (value == null) continue;
+    const text = value.trim();
+    if (chosen.field === "revisionLabel") {
+      store.describeMapping(session.sidecarPath, {
+        revision: { label: text || undefined },
+      });
+    } else if (chosen.field === "receivedAt") {
+      store.describeMapping(session.sidecarPath, {
+        revision: { receivedAt: text || undefined },
+      });
+    } else if (chosen.field === "note") {
+      store.describeMapping(session.sidecarPath, {
+        revision: { note: text || undefined },
+      });
+    } else {
+      store.describeMapping(session.sidecarPath, { [chosen.field]: text || undefined });
+    }
+  }
+}
+
+/** Drop one mapping, leaving the manuscript, the PDF and its report alone. */
+async function deleteMapping(
+  store: ReviewStore,
+  sidecarPath?: string
+): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const session = sidecarPath
+    ? store.getBySidecar(sidecarPath)
+    : adocPath
+      ? store.get(adocPath)
+      : undefined;
+  if (!session) return;
+  const pick = await vscode.window.showWarningMessage(
+    `Remove ${revisionLabel(session.revision)} · ${mappingLabel(session)}?`,
+    {
+      modal: true,
+      detail:
+        `Deletes ${path.basename(session.sidecarPath)} and the review state in ` +
+        `it — resolved marks, notes and replies for this mapping. The ` +
+        `manuscript, the PDF and any exported report are left alone.`,
+    },
+    "Remove"
+  );
+  if (pick !== "Remove") return;
+  if (store.deleteMapping(session.sidecarPath)) {
+    vscode.window.showInformationMessage(
+      `Eddie Doc: removed ${mappingLabel(session)}.`
+    );
+  }
+}
+
+/** Move sidecars that still sit beside a manuscript into the review folder. */
+async function migrateReviews(store: ReviewStore): Promise<void> {
+  if (!store.layoutConfig.reviewFolder.trim()) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: no review folder configured — set eddieDoc.reviewFolder first."
+    );
+    return;
+  }
+  await loadWorkspaceSidecars(store);
+  const steps = store.planMigration();
+  if (!steps.length) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: every review already lives in the review folder."
+    );
+    return;
+  }
+  const root = store.layoutConfig.workspaceRoot;
+  const show = (p: string) => (root ? path.relative(root, p) : path.basename(p));
+  const listed = steps.slice(0, 12).map((s) => `${show(s.from)}  →  ${show(s.to)}`);
+  if (steps.length > listed.length)
+    listed.push(`…and ${steps.length - listed.length} more`);
+
+  const pick = await vscode.window.showInformationMessage(
+    `Move ${steps.length} review file(s) into the review folder?`,
+    {
+      modal: true,
+      detail:
+        listed.join("\n") +
+        "\n\nThe manuscript files are not touched. Each sidecar is rewritten " +
+        "at its new location so the paths inside stay relative and portable.",
+    },
+    "Move"
+  );
+  if (pick !== "Move") return;
+
+  const res = store.migrate(steps);
+  if (res.failed.length) {
+    vscode.window.showWarningMessage(
+      `Eddie Doc: moved ${res.moved}, failed ${res.failed.length} — ${res.failed[0]}`
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `Eddie Doc: moved ${res.moved} review file(s) into the review folder.`
+    );
+  }
+}
+
+/** Reveal the active document's folder in the review tree. */
+async function openReviewFolder(store: ReviewStore): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const folder = adocPath
+    ? documentFolder(store.layoutConfig, adocPath)
+    : undefined;
+  if (!folder) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: reviews are stored beside the manuscript — set " +
+        "eddieDoc.reviewFolder to keep them in their own folder."
+    );
+    return;
+  }
+  if (!fs.existsSync(folder)) {
+    vscode.window.showInformationMessage(
+      `Eddie Doc: nothing stored yet for ${path.basename(adocPath!)}.`
+    );
+    return;
+  }
+  await vscode.commands.executeCommand(
+    "revealFileInOS",
+    vscode.Uri.file(folder)
+  );
+}
+
+/** Accept a sidecar path, or the tree's mapping node, from a command argument. */
+function sidecarArg(arg: unknown): string | undefined {
+  if (typeof arg === "string") return arg;
+  if (arg && typeof arg === "object") {
+    const node = arg as { type?: string; session?: { sidecarPath?: string } };
+    if (node.type === "mapping" && node.session?.sidecarPath)
+      return node.session.sidecarPath;
+  }
+  return undefined;
+}
+
 /**
  * Discover every persisted review in the workspace by its `.review.json` sidecar
- * and load it, so all pairs are known (and switchable) without first opening each
- * .adoc. The source path is derived from the sidecar's name — a review.json next
- * to `foo.adoc` is `foo.review.json`, next to `foo.asciidoc` is
- * `foo.asciidoc.review.json` — and only loaded if the source file still exists.
+ * and load it, so all rounds are known (and switchable) without first opening
+ * each .adoc.
+ *
+ * A sidecar under the review folder no longer sits next to the document it
+ * describes, so the source is taken from the path recorded inside it; only a
+ * legacy sidecar still falls back to name-matching against its neighbours.
  */
 async function loadWorkspaceSidecars(store: ReviewStore): Promise<void> {
   let files: vscode.Uri[];
@@ -663,18 +1238,33 @@ async function loadWorkspaceSidecars(store: ReviewStore): Promise<void> {
     return;
   }
   for (const f of files) {
-    const base = f.fsPath.replace(/\.review\.json$/i, "");
-    const adoc = [base, base + ".adoc", base + ".asciidoc"].find(
-      (p) => isAdocPath(p) && fs.existsSync(p)
-    );
-    if (adoc && !store.get(adoc)) store.tryLoadSidecar(adoc);
+    if (store.getBySidecar(f.fsPath)) continue;
+    let adoc: string | undefined;
+    try {
+      adoc = resolveSourcePath(fs.readFileSync(f.fsPath, "utf8"), f.fsPath);
+    } catch {
+      continue;
+    }
+    if (!adoc || !isAdocPath(adoc) || !fs.existsSync(adoc)) {
+      // Pre-v2 sidecar: its source is named by the file itself.
+      const base = f.fsPath.replace(/\.review\.json$/i, "");
+      adoc = [base, base + ".adoc", base + ".asciidoc"].find(
+        (p) => isAdocPath(p) && fs.existsSync(p)
+      );
+    }
+    if (adoc) store.loadSidecarFile(f.fsPath, adoc);
   }
 }
 
-/** Pick a loaded review and open its .adoc so the tree/editor/preview follow. */
+/**
+ * Pick a reviewed document and open it so the tree/editor/preview follow. One
+ * row per document — its rounds are then switched between with
+ * {@link switchMapping}, which keeps this list the size of the manuscript rather
+ * than the size of its review history.
+ */
 async function switchReview(store: ReviewStore): Promise<void> {
-  const sessions = store.all();
-  if (sessions.length === 0) {
+  const docs = store.documents();
+  if (docs.length === 0) {
     vscode.window.showInformationMessage(
       "Eddie Doc: no reviews loaded — run 'Open PDF Review' first."
     );
@@ -684,26 +1274,36 @@ async function switchReview(store: ReviewStore): Promise<void> {
   interface Pick extends vscode.QuickPickItem {
     adocPath: string;
   }
-  const picks: Pick[] = sessions
-    .slice()
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .map((s) => {
-      const matched = s.items.filter(
-        (i) => effectiveLine(i) !== UNMATCHED
-      ).length;
-      const open = s.items.filter((i) => !i.resolved).length;
+  const picks: Pick[] = docs
+    .map((adocPath) => {
+      const sessions = store.sessionsFor(adocPath);
+      const active = store.get(adocPath);
+      const rounds = store.revisionsFor(adocPath).length;
+      const open = sessions.reduce(
+        (n, s) => n + s.items.filter((i) => !i.resolved).length,
+        0
+      );
+      const total = sessions.reduce((n, s) => n + s.items.length, 0);
       return {
-        label: path.basename(s.adocPath),
-        description: `${matched}/${s.items.length} mapped · ${open} open · ${path.basename(
-          s.pdfPath
-        )}`,
-        adocPath: s.adocPath,
+        label: path.basename(adocPath),
+        description:
+          `${open} open of ${total} · ${rounds} round(s)` +
+          (sessions.length > rounds ? ` · ${sessions.length} mappings` : ""),
+        detail: active
+          ? `showing ${revisionLabel(active.revision)} · ${mappingLabel(active)}`
+          : undefined,
+        adocPath,
+        updatedAt: sessions
+          .map((s) => s.updatedAt)
+          .sort()
+          .pop() ?? "",
       };
-    });
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   const chosen = await vscode.window.showQuickPick(picks, {
     title: "Switch review",
-    placeHolder: "Choose the .adoc / .pdf pair to review",
+    placeHolder: "Choose the document to review",
   });
   if (!chosen) return;
 
@@ -1265,7 +1865,15 @@ async function stampReviewedPdf(
   const freshPath = picked?.[0]?.fsPath;
   if (!freshPath) return;
 
-  const outPath = freshPath.replace(/\.pdf$/i, "") + ".reviewed.pdf";
+  // The stamped PDF is an intermediate artifact of this round, so it belongs
+  // with the round — not in the manuscript folder next to the clean render.
+  const outPath = outputPath(
+    store,
+    session,
+    "stampOutput",
+    freshPath.replace(/\.pdf$/i, "") + ".reviewed.pdf",
+    "pdf"
+  );
 
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "Eddie Doc: stamping review…" },
@@ -1275,7 +1883,14 @@ async function stampReviewedPdf(
       const source = fs.readFileSync(adocPath, "utf8");
       const { anchored, unstamped } = anchorItems(session.items, source, pages);
       const result = await stampPdf(bytes, anchored);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
       fs.writeFileSync(outPath, result.bytes);
+      store.recordArtifact(session.sidecarPath, {
+        kind: "stampedPdf",
+        path: outPath,
+        createdAt: new Date().toISOString(),
+        note: `stamped from ${path.basename(freshPath)}`,
+      });
 
       const summary =
         `Stamped ${result.marks} mark(s) and ${result.replies} repl(ies) into ` +
@@ -1576,11 +2191,15 @@ function resolveItemRef(store: ReviewStore, arg: unknown): ItemRef | undefined {
         ? (arg[0] as string)
         : undefined;
   if (!id) return undefined;
-  // Find which session owns this id.
-  for (const s of store.all()) {
-    if (s.items.some((i) => i.id === id)) return { adocPath: s.adocPath, id };
+  // Find which mapping owns this id. Annotation ids repeat across rounds, so
+  // locate() prefers the one on screen; a hit in another round becomes the
+  // shown one, since that is where the command is about to act.
+  const owner = store.locate(id);
+  if (!owner) return undefined;
+  if (store.get(owner.adocPath)?.sidecarPath !== owner.sidecarPath) {
+    store.setActive(owner.sidecarPath);
   }
-  return undefined;
+  return { adocPath: owner.adocPath, id };
 }
 
 function jump(store: ReviewStore, dir: 1 | -1): void {

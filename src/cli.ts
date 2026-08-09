@@ -18,7 +18,12 @@ import { extractAnnotations, readPages } from "./pdf/extract.js";
 import { mapAnnotations, effectiveLine } from "./matching/mapper.js";
 import { lexicalFallback } from "./matching/lexical.js";
 import { renderReport } from "./model/report.js";
-import { parse as parseSidecar, serialize } from "./model/format.js";
+import {
+  defaultRevision,
+  parse as parseSidecar,
+  resolveSourcePath,
+  serialize,
+} from "./model/format.js";
 import { KIND_LABEL, type ReviewSession } from "./model/types.js";
 import { anchorItems, type AnchorResult } from "./pdf/anchor.js";
 import { stampPdf } from "./pdf/stamp.js";
@@ -91,9 +96,15 @@ async function mapCmd(args: string[]): Promise<number> {
     const now = new Date().toISOString();
     out(
       renderReport({
-        version: 2,
+        version: 3,
+        // `map` is a throwaway harness: it never writes a sidecar, so this
+        // session exists only to be rendered.
+        sidecarPath: "",
         adocPath,
         pdfPath,
+        revision: defaultRevision(),
+        mapping: { id: "map", kind: "annotations" },
+        pdf: { role: "annotated" },
         createdAt: now,
         updatedAt: now,
         items,
@@ -285,8 +296,10 @@ function parseFlags(args: string[]): Flags {
 }
 
 /**
- * Read a sidecar. The `.adoc` it binds to is derived from the sidecar's own
- * name, matching how the extension pairs them, unless the caller names one.
+ * Read a sidecar and bind it to its manuscript: the path the caller named, else
+ * the one recorded inside the file (relative to it, so a sidecar in the review
+ * folder resolves correctly), else the pre-v2 convention of a same-named
+ * neighbour.
  */
 function loadSession(
   sidecarPath: string,
@@ -295,7 +308,9 @@ function loadSession(
   try {
     const text = readFileSync(sidecarPath, "utf8");
     const adoc =
-      adocPath ?? sidecarPath.replace(/\.review\.json$/i, "") + ".adoc";
+      adocPath ??
+      resolveSourcePath(text, sidecarPath) ??
+      sidecarPath.replace(/\.review\.json$/i, "") + ".adoc";
     return parseSidecar(text, sidecarPath, adoc);
   } catch {
     return null;

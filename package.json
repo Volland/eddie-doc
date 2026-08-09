@@ -58,6 +58,46 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "eddieDoc.switchMapping",
+        "title": "Eddie Doc: Switch Round / Mapping",
+        "icon": "$(versions)"
+      },
+      {
+        "command": "eddieDoc.activateMapping",
+        "title": "Eddie Doc: Show This Round",
+        "icon": "$(circle-filled)"
+      },
+      {
+        "command": "eddieDoc.newRevision",
+        "title": "Eddie Doc: Start New Review Round…",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "eddieDoc.addMapping",
+        "title": "Eddie Doc: Add Annotated PDF to Current Round…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "eddieDoc.editMappingInfo",
+        "title": "Eddie Doc: Edit Round Details…",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "eddieDoc.deleteMapping",
+        "title": "Eddie Doc: Remove This Mapping…",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "eddieDoc.migrateReviews",
+        "title": "Eddie Doc: Move Reviews into Review Folder…",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "eddieDoc.openReviewFolder",
+        "title": "Eddie Doc: Open Review Folder",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "eddieDoc.extractAnnotations",
         "title": "Eddie Doc: Extract Annotations as AsciiDoc",
         "icon": "$(export)"
@@ -173,43 +213,43 @@
     "viewsWelcome": [
       {
         "view": "eddieDoc.annotations",
-        "contents": "No review loaded.\nOpen an annotated PDF and map its comments onto the active .adoc file.\n[Open PDF Review](command:eddieDoc.openReview)"
+        "contents": "No review loaded.\nOpen an annotated PDF and map its comments onto the active .adoc file. Each PDF becomes one mapping in a review round; later rounds carry your resolved state forward.\n[Open PDF Review](command:eddieDoc.openReview)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "eddieDoc.switchMapping",
+          "when": "view == eddieDoc.annotations && eddieDoc.hasRounds",
+          "group": "navigation@0"
+        },
+        {
           "command": "eddieDoc.switchReview",
           "when": "view == eddieDoc.annotations && eddieDoc.hasMultipleReviews",
-          "group": "navigation@0"
+          "group": "navigation@1"
         },
         {
           "command": "eddieDoc.openReview",
           "when": "view == eddieDoc.annotations",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "eddieDoc.refresh",
           "when": "view == eddieDoc.annotations",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "eddieDoc.applyAllEdits",
           "when": "view == eddieDoc.annotations",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "eddieDoc.triageUnmatched",
           "when": "view == eddieDoc.annotations",
-          "group": "navigation@4"
-        },
-        {
-          "command": "eddieDoc.exportReport",
-          "when": "view == eddieDoc.annotations",
           "group": "navigation@5"
         },
         {
-          "command": "eddieDoc.anchorSource",
+          "command": "eddieDoc.exportReport",
           "when": "view == eddieDoc.annotations",
           "group": "navigation@6"
         },
@@ -217,6 +257,41 @@
           "command": "eddieDoc.stampPdf",
           "when": "view == eddieDoc.annotations",
           "group": "navigation@7"
+        },
+        {
+          "command": "eddieDoc.newRevision",
+          "when": "view == eddieDoc.annotations",
+          "group": "1_rounds@0"
+        },
+        {
+          "command": "eddieDoc.addMapping",
+          "when": "view == eddieDoc.annotations",
+          "group": "1_rounds@1"
+        },
+        {
+          "command": "eddieDoc.switchMapping",
+          "when": "view == eddieDoc.annotations",
+          "group": "1_rounds@2"
+        },
+        {
+          "command": "eddieDoc.editMappingInfo",
+          "when": "view == eddieDoc.annotations",
+          "group": "1_rounds@3"
+        },
+        {
+          "command": "eddieDoc.anchorSource",
+          "when": "view == eddieDoc.annotations",
+          "group": "2_source@0"
+        },
+        {
+          "command": "eddieDoc.openReviewFolder",
+          "when": "view == eddieDoc.annotations",
+          "group": "3_storage@0"
+        },
+        {
+          "command": "eddieDoc.migrateReviews",
+          "when": "view == eddieDoc.annotations",
+          "group": "3_storage@1"
         }
       ],
       "view/item/context": [
@@ -224,6 +299,26 @@
           "command": "eddieDoc.triageUnmatched",
           "when": "view == eddieDoc.annotations && viewItem == group.unmatched",
           "group": "inline@0"
+        },
+        {
+          "command": "eddieDoc.newRevision",
+          "when": "view == eddieDoc.annotations && viewItem == group.revisions",
+          "group": "inline@0"
+        },
+        {
+          "command": "eddieDoc.activateMapping",
+          "when": "view == eddieDoc.annotations && viewItem == mapping",
+          "group": "inline@0"
+        },
+        {
+          "command": "eddieDoc.editMappingInfo",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^mapping/",
+          "group": "inline@1"
+        },
+        {
+          "command": "eddieDoc.deleteMapping",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^mapping/",
+          "group": "9_danger@0"
         },
         {
           "command": "eddieDoc.confirmMatch",
@@ -326,6 +421,32 @@
           "command": "eddieDoc.openReview"
         },
         {
+          "command": "eddieDoc.newRevision"
+        },
+        {
+          "command": "eddieDoc.addMapping"
+        },
+        {
+          "command": "eddieDoc.switchMapping"
+        },
+        {
+          "command": "eddieDoc.editMappingInfo"
+        },
+        {
+          "command": "eddieDoc.migrateReviews"
+        },
+        {
+          "command": "eddieDoc.openReviewFolder"
+        },
+        {
+          "command": "eddieDoc.activateMapping",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.deleteMapping",
+          "when": "false"
+        },
+        {
           "command": "eddieDoc.addReply",
           "when": "false"
         },
@@ -373,6 +494,42 @@
     "configuration": {
       "title": "Eddie Doc",
       "properties": {
+        "eddieDoc.reviewFolder": {
+          "type": "string",
+          "default": ".eddie",
+          "markdownDescription": "Folder holding every review file — mappings, metadata, reports and intermediate PDFs — so the manuscript folder stays clean. Relative paths resolve against the workspace root; absolute paths are used as-is. Its subfolders mirror your manuscript tree: `manuscript/chapter-01.adoc` → `.eddie/manuscript/chapter-01/rev-1/<mapping>.review.json`. Set to an empty string to keep the old layout, with `<file>.review.json` beside each `.adoc`."
+        },
+        "eddieDoc.importPdfs": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Copy each annotated PDF into its round's `pdf/` folder when it is mapped, so a round stays readable after the download folder it arrived in is cleared. Off by default: the sidecar just points at the PDF where it lives."
+        },
+        "eddieDoc.stampOutput": {
+          "type": "string",
+          "enum": [
+            "reviewFolder",
+            "besidePdf"
+          ],
+          "enumDescriptions": [
+            "Write stamped PDFs into the round's pdf/ folder inside the review folder.",
+            "Write stamped PDFs next to the clean render they were stamped from."
+          ],
+          "default": "reviewFolder",
+          "description": "Where 'Stamp Reviewed PDF' writes its output. The clean render is never modified either way."
+        },
+        "eddieDoc.reportOutput": {
+          "type": "string",
+          "enum": [
+            "reviewFolder",
+            "besideSource"
+          ],
+          "enumDescriptions": [
+            "Write review reports into the round's folder inside the review folder.",
+            "Write review reports next to the .adoc, as <file>.review.md."
+          ],
+          "default": "reviewFolder",
+          "description": "Where 'Export Review Report' writes its Markdown report."
+        },
         "eddieDoc.matchThreshold": {
           "type": "number",
           "default": 0.5,
