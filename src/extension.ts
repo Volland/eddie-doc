@@ -275,7 +275,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((ed) => {
-      if (ed && isAdocDoc(ed.document)) {
+      // Focus moving off the text editors — into a comment thread's reply box, a
+      // webview, the terminal — changes nothing we render, and refreshing there
+      // would re-point the PDF preview and steal the focus straight back.
+      if (!ed) return;
+      if (isAdocDoc(ed.document)) {
         lastAdoc = ed.document.uri.fsPath;
         store.tryLoadSidecar(lastAdoc);
       }
@@ -429,17 +433,21 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
 
+    // Editing happens in the thread itself, not in a modal prompt: the reply is
+    // read in context, so it should be rewritten in context too.
     vscode.commands.registerCommand(
       "eddieDoc.editReply",
-      async (comment: ReviewComment) => {
-        if (!comment?.replyId) return;
-        const body = await vscode.window.showInputBox({
-          title: "Edit reply",
-          value: typeof comment.body === "string" ? comment.body : comment.body.value,
-        });
-        if (body == null) return;
-        store.editReply(comment.adocPath, comment.itemId, comment.replyId, body);
-      }
+      (comment: ReviewComment) => comments.beginEdit(comment)
+    ),
+
+    vscode.commands.registerCommand(
+      "eddieDoc.saveReply",
+      (comment: ReviewComment) => comments.finishEdit(comment)
+    ),
+
+    vscode.commands.registerCommand(
+      "eddieDoc.cancelReply",
+      (comment: ReviewComment) => comments.cancelEdit(comment)
     ),
 
     vscode.commands.registerCommand(

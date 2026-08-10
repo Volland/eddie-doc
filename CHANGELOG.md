@@ -5,6 +5,27 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Replies could not be typed.** Clicking into a thread's reply box reflowed
+  everything and threw the box away. Three things were tearing the widget down:
+  every refresh disposed and recreated all threads (a disposed thread takes its
+  popup, focus, typed text and expanded state with it), focusing the box fires an
+  active-editor change that triggered exactly that refresh, and keystrokes in the
+  box could be read as edits to the manuscript — shifting every annotation anchor
+  under the cursor. Threads are now reconciled in place: only fields that
+  actually differ are written, and the disclosure state belongs to the user after
+  creation. Refreshes are skipped when focus merely leaves the text editors, and
+  only real files on disk count as the manuscript, so a reply box, a diff side or
+  a git buffer can no longer masquerade as the `.adoc`.
+
+### Changed
+- Editing a reply happens in the thread itself, with *Save* and *Cancel*, instead
+  of in a modal input box. A reply is read in context, so it is rewritten in
+  context; emptying the box restores the previous text rather than saving a blank
+  reply, since deleting is its own explicit action.
+
+## [1.1.0] — 2026-08-09
+
 Fits the real editing process. A manuscript goes through several rounds of
 edits, and one round often comes back as several annotated PDFs from several
 places at once — the model of "one `.adoc`, one sidecar, one PDF" could not hold

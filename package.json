@@ -172,6 +172,14 @@
         "icon": "$(edit)"
       },
       {
+        "command": "eddieDoc.saveReply",
+        "title": "Save"
+      },
+      {
+        "command": "eddieDoc.cancelReply",
+        "title": "Cancel"
+      },
+      {
         "command": "eddieDoc.deleteReply",
         "title": "Delete Reply",
         "icon": "$(trash)"
@@ -416,6 +424,18 @@
           "group": "group@2"
         }
       ],
+      "comments/comment/context": [
+        {
+          "command": "eddieDoc.cancelReply",
+          "when": "commentController == eddieDoc.review && comment == eddieDoc.reply",
+          "group": "inline@1"
+        },
+        {
+          "command": "eddieDoc.saveReply",
+          "when": "commentController == eddieDoc.review && comment == eddieDoc.reply",
+          "group": "inline@2"
+        }
+      ],
       "commandPalette": [
         {
           "command": "eddieDoc.openReview"
@@ -452,6 +472,14 @@
         },
         {
           "command": "eddieDoc.editReply",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.saveReply",
+          "when": "false"
+        },
+        {
+          "command": "eddieDoc.cancelReply",
           "when": "false"
         },
         {
