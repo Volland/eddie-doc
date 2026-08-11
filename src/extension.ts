@@ -7,7 +7,7 @@ import { AnnotationTreeProvider } from "./ui/treeProvider.js";
 import { DecorationManager } from "./ui/decorations.js";
 import { DiagnosticsManager } from "./ui/diagnostics.js";
 import { EddieCodeActionProvider } from "./ui/codeActions.js";
-import { effectiveLine } from "./matching/mapper.js";
+import { effectiveLine, isConfident } from "./matching/mapper.js";
 import {
   buildSourceIndex,
   topMatches,
@@ -78,6 +78,13 @@ function importPdfs(): boolean {
   return vscode.workspace
     .getConfiguration("eddieDoc")
     .get<boolean>("importPdfs", false);
+}
+
+/** Write anchor markers as soon as a PDF is mapped, while matching is reliable. */
+function autoAnchor(): boolean {
+  return vscode.workspace
+    .getConfiguration("eddieDoc")
+    .get<boolean>("autoAnchor", true);
 }
 
 /**
@@ -892,6 +899,10 @@ async function openReview(
             preview: false,
           });
         }
+        // Pin the marks to the text while the text still resembles what the
+        // editor read. This is the only moment matching is trustworthy, so it
+        // is the moment to record the bindings — see `autoAnchorReview`.
+        if (autoAnchor()) await autoAnchorReview(store, adocPath);
         await vscode.commands.executeCommand("eddieDoc.annotations.focus");
       } catch (e) {
         vscode.window.showErrorMessage(
@@ -1810,6 +1821,58 @@ async function applyReplace(
 }
 
 /**
+ * Anchor a freshly imported mapping without asking.
+ *
+ * A line number is a guess about a document that is about to change; a marker
+ * *is* the binding, and it travels with its paragraph through any rewrite, `sed`,
+ * merge or agent pass. Import is the one moment the source still resembles what
+ * the editor read, which makes it the only moment matching can be trusted — so
+ * that is when the bindings get written down. Everything afterwards resolves an
+ * identity instead of searching stale wording against rewritten prose.
+ *
+ * Saved immediately when the document is clean: the sidecar now *claims* those
+ * markers exist, and a sidecar that references markers absent from the file on
+ * disk is worse than no anchors at all. When the author has unsaved work the
+ * edit is left dirty for them to save — their changes are not ours to commit.
+ */
+async function autoAnchorReview(
+  store: ReviewStore,
+  adocPath: string
+): Promise<void> {
+  const doc = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(adocPath)
+  );
+  const wasDirty = doc.isDirty;
+  const before = doc.getText();
+  const res = store.buildAnchors(adocPath, before);
+  if (!res || res.inserted === 0) return;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    doc.uri,
+    new vscode.Range(doc.positionAt(0), doc.positionAt(before.length)),
+    res.source
+  );
+  if (!(await vscode.workspace.applyEdit(edit))) {
+    vscode.window.showWarningMessage(
+      "Eddie Doc: could not anchor the annotations in the source."
+    );
+    return;
+  }
+  if (!wasDirty) await doc.save();
+  // Marker lines shift every line below them, so the positions this mapping was
+  // just built from are now off by the markers above each one. Re-mapping
+  // resolves each item through its own marker instead, which is exact.
+  await store.remapAll(adocPath, threshold());
+  vscode.window.showInformationMessage(
+    `Eddie Doc: anchored ${res.anchored} annotation(s) with ${res.inserted} ` +
+      `marker comment(s)${wasDirty ? " — save the file to keep them" : ""}. ` +
+      `They keep the marks attached through rewrites, never render, and ` +
+      `“Remove Source Anchors” takes them out.`
+  );
+}
+
+/**
  * Write `// eddie:<id>` markers into the source above every located annotation,
  * and record the resulting anchors in the sidecar.
  *
@@ -2109,11 +2172,6 @@ function highConfidence(): number {
     .get<number>("highConfidence", 0.75);
 }
 
-/** A link we trust enough to act on without a manual look. */
-function isConfident(item: ReviewItem, highConf: number): boolean {
-  if (item.manualLine != null || item.confirmed) return true;
-  return (item.match?.score ?? 0) >= highConf;
-}
 
 function clip(s: string, n: number): string {
   const t = s.replace(/\s+/g, " ").trim();

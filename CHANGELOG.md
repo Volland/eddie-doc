@@ -5,7 +5,28 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Marks stop drifting. Re-matching an established link could only ever degrade it
+— it compares the editor's original PDF wording against prose that has since
+been rewritten — and it ran on every save. Links are now *maintained* rather
+than recomputed, and bound to the text itself the moment a PDF is mapped.
+
 ### Fixed
+- **Rewriting the document silently moved the marks.** The save-time re-map
+  discarded the position it already had (kept correct by live tracking, which
+  follows your real edits) and re-derived it by matching the editor's original
+  wording against the current text. Once the marked sentence is rewritten the
+  strongest remaining candidate is some *other* paragraph that still shares its
+  vocabulary — a confident wrong answer, which then overwrote the right one.
+  An established link is now defended, not recomputed: a hand-picked line, a
+  marker, or a link you vouched for is never re-searched, and an automatic link
+  only *moves* for a match at least as good as the one it would replace.
+- **Confirming a match did nothing that lasted.** `confirmed` was the one field a
+  re-map did not carry forward, so every save quietly un-vouched the item and
+  then re-matched it — discarding the only signal a human had given it.
+- **A lost anchor fell through to guessing.** When a marker, block id and
+  fingerprint all failed to resolve, the item was handed to the fuzzy matcher —
+  precisely the case where it is least trustworthy. It now holds its place and
+  is flagged instead.
 - **Editing shook the page.** Typing in a mapped `.adoc` rebuilt the UI far more
   often than it needed to, and the rebuilds were visible as the text jumping
   under the cursor.
@@ -23,8 +44,32 @@ This project adheres to [Semantic Versioning](https://semver.org/).
     marker takes up room in the line, so re-applying it mid-word re-wraps the
     paragraph being typed into. Redraws now settle 200 ms after the last
     keystroke; anchor tracking itself still happens per keystroke, as it must.
+- **Replies could not be typed.** Clicking into a thread's reply box reflowed
+  everything and threw the box away. Three things were tearing the widget down:
+  every refresh disposed and recreated all threads (a disposed thread takes its
+  popup, focus, typed text and expanded state with it), focusing the box fires an
+  active-editor change that triggered exactly that refresh, and keystrokes in the
+  box could be read as edits to the manuscript — shifting every annotation anchor
+  under the cursor. Threads are now reconciled in place: only fields that
+  actually differ are written, and the disclosure state belongs to the user after
+  creation. Refreshes are skipped when focus merely leaves the text editors, and
+  only real files on disk count as the manuscript, so a reply box, a diff side or
+  a git buffer can no longer masquerade as the `.adoc`.
 
 ### Added
+- **Anchoring on import** (`eddieDoc.autoAnchor`, on by default). Invisible
+  `// eddie:<id>` markers are written into the source as soon as a PDF is
+  mapped, because import is the one moment the source still resembles what the
+  editor read — the only moment matching can be trusted. From then on a mark
+  resolves an identity that travels with its paragraph through any rewrite,
+  `sed`, merge or agent pass. Applied as one undoable edit and saved at once (a
+  sidecar naming markers that aren't on disk would be worse than no anchors); if
+  you had unsaved work the markers are left dirty for you to save. Asciidoctor
+  strips `//` comments, so they can never reach a rendered PDF.
+- **Stale marks.** When nothing holds a link any more, the item keeps its last
+  known place and is marked `stale`: routed to *Needs review*, labelled on the
+  row, explained in the tooltip and hover, and counted in a warning when it
+  happens. *Confirm Match* or *Re-link* clears it. Nothing relocates quietly.
 - `eddieDoc.inlineMarkers` (default on) — turn off the `✎ <kind>` label at the
   end of each annotated line. It occupies room in the line, so in wrapped prose
   the paragraph re-wraps when a marker appears or changes width. Off keeps the
@@ -38,21 +83,6 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   one of them re-lays out the page under the cursor, so the click misses the
   reply box. The gutter icon, the end-of-line marker and the tree already say
   where the work is. `eddieDoc.expandThreads` restores the old behaviour.
-
-### Fixed
-- **Replies could not be typed.** Clicking into a thread's reply box reflowed
-  everything and threw the box away. Three things were tearing the widget down:
-  every refresh disposed and recreated all threads (a disposed thread takes its
-  popup, focus, typed text and expanded state with it), focusing the box fires an
-  active-editor change that triggered exactly that refresh, and keystrokes in the
-  box could be read as edits to the manuscript — shifting every annotation anchor
-  under the cursor. Threads are now reconciled in place: only fields that
-  actually differ are written, and the disclosure state belongs to the user after
-  creation. Refreshes are skipped when focus merely leaves the text editors, and
-  only real files on disk count as the manuscript, so a reply box, a diff side or
-  a git buffer can no longer masquerade as the `.adoc`.
-
-### Changed
 - Editing a reply happens in the thread itself, with *Save* and *Cancel*, instead
   of in a modal input box. A reply is read in context, so it is rewritten in
   context; emptying the box restores the previous text rather than saving a blank

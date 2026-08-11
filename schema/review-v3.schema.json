@@ -328,6 +328,10 @@
           "type": "boolean",
           "description": "User has vouched for the link (hand-picked or accepted a weak match)."
         },
+        "stale": {
+          "type": "boolean",
+          "description": "The text this link described is no longer recognisable: its anchor stopped resolving, or re-matching now scores materially worse than when the link was made. The item keeps its last known position and is routed to 'Needs review'; vouching for it or re-linking it clears the flag."
+        },
         "manualLine": {
           "type": "integer",
           "minimum": 0,

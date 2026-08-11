@@ -106,7 +106,7 @@ function buildHover(items: ReviewItem[]): vscode.MarkdownString {
     md.appendMarkdown(
       `**${KIND_LABEL[it.kind]}**${it.author ? ` · _${it.author}_` : ""}${
         it.resolved ? " · ✅ resolved" : ""
-      } · p${it.page}\n\n`
+      }${it.stale ? " · ⚠️ stale" : ""} · p${it.page}\n\n`
     );
     if (it.anchoredText)
       md.appendMarkdown(`> ${it.anchoredText.replace(/\n/g, " ")}\n\n`);

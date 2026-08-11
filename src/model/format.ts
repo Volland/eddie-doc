@@ -158,6 +158,8 @@ export interface StateDoc {
   resolved: boolean;
   /** User has vouched for the link (hand-picked or accepted a weak match). */
   confirmed?: boolean;
+  /** The text this link described has changed; held in place pending a human. */
+  stale?: boolean;
   /** 0-based line the user manually linked to; overrides `match`. */
   manualLine?: number;
   note?: string;
@@ -448,6 +450,7 @@ export function toDocument(
     const state: StateDoc = cleanUndefined({
       resolved: !!it.resolved,
       confirmed: it.confirmed || undefined,
+      stale: it.stale || undefined,
       manualLine: it.manualLine,
       note: it.note,
       replies: cleanReplies(it.replies),
@@ -561,6 +564,7 @@ function itemsFromDoc(doc: {
       match: d.match ?? null,
       resolved: !!s.resolved,
       confirmed: s.confirmed || undefined,
+      stale: s.stale || undefined,
       manualLine: s.manualLine,
       note: s.note,
       replies: cleanReplies(s.replies),

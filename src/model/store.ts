@@ -362,6 +362,8 @@ export class ReviewStore {
       stats
     );
     await this.runFallbacks(items, source);
+    // Carrying state into a new round can surface marks whose paragraph is gone.
+    this.warnNewlyStale(stats.stale ?? 0);
     if (stats.carried > 0) {
       // A re-exported PDF re-keys every annotation id; content fingerprints
       // just rescued that state, and the user should know it survived.
@@ -497,7 +499,8 @@ export class ReviewStore {
   async remap(adocPath: string, threshold: number): Promise<void> {
     const session = this.get(adocPath);
     if (!session) return;
-    await this.remapSession(session, threshold, false);
+    const res = await this.remapSession(session, threshold, false);
+    this.warnNewlyStale(res.newlyStale);
     this._onDidChange.fire(adocPath);
   }
 
@@ -516,14 +519,17 @@ export class ReviewStore {
     opts: { onlyIfSourceChanged?: boolean } = {}
   ): Promise<number> {
     let remapped = 0;
+    let newlyStale = 0;
     for (const s of this.sessionsFor(adocPath)) {
-      const did = await this.remapSession(
+      const res = await this.remapSession(
         s,
         threshold,
         opts.onlyIfSourceChanged ?? false
       );
-      if (did) remapped++;
+      if (res.changed) remapped++;
+      newlyStale += res.newlyStale;
     }
+    this.warnNewlyStale(newlyStale);
     // One event for the document, not one per round. Firing per round meant the
     // tree, the decorations and the comment threads rebuilt N times per save —
     // and, while the loop was walking the rounds, rendered whichever round it
@@ -541,16 +547,21 @@ export class ReviewStore {
     session: ReviewSession,
     threshold: number,
     skipUnchangedSource: boolean
-  ): Promise<boolean> {
+  ): Promise<{ changed: boolean; newlyStale: number }> {
     const sourceBytes = fs.readFileSync(session.adocPath);
     const sha = sha256(new Uint8Array(sourceBytes));
     if (skipUnchangedSource && session.integrity?.sourceSha256 === sha) {
-      return false;
+      return { changed: false, newlyStale: 0 };
     }
     const source = sourceBytes.toString("utf8");
     const raw = session.items.map(toRaw);
+    const wasStale = session.items.filter((i) => i.stale).length;
     const items = mapAnnotations(raw, source, { threshold }, session.items);
     await this.runFallbacks(items, source);
+    const newlyStale = Math.max(
+      0,
+      items.filter((i) => i.stale).length - wasStale
+    );
     session.items = items;
     session.version = 3;
     session.updatedAt = new Date().toISOString();
@@ -560,7 +571,21 @@ export class ReviewStore {
       sourceBytes: sourceBytes.length,
     } satisfies SessionIntegrity;
     this.persist(session);
-    return true;
+    return { changed: true, newlyStale };
+  }
+
+  /**
+   * Say it once when marks stop describing their text. Only the *newly* stale
+   * are worth a message: an already-flagged item is on the tree waiting for the
+   * author, and repeating it on every save would train them to dismiss it.
+   */
+  private warnNewlyStale(count: number): void {
+    if (count <= 0) return;
+    vscode.window.showWarningMessage(
+      `Eddie Doc: ${count} annotation(s) no longer match the text they were ` +
+        `linked to. They are held at their last known place and marked stale ` +
+        `under "Needs review" — confirm or re-link them.`
+    );
   }
 
   /**
@@ -773,6 +798,7 @@ export class ReviewStore {
     if (!item) return;
     item.manualLine = line;
     item.confirmed = true; // a hand-picked line is trusted
+    item.stale = undefined; // and it answers whatever the flag was asking
     this.touch(adocPath);
   }
 
@@ -826,6 +852,7 @@ export class ReviewStore {
     const item = this.findItem(adocPath, id);
     if (!item) return;
     item.confirmed = true;
+    item.stale = undefined; // vouching for the link is how a stale one is settled
     this.touch(adocPath);
   }
 
@@ -851,11 +878,16 @@ export class ReviewStore {
       };
       item.manualLine = undefined;
       item.confirmed = true; // a resolved identity is not a guess
+      item.stale = undefined;
       this.touch(adocPath);
       return;
     }
     const idx = buildSourceIndex(source);
-    item.match = matchOne(item, idx, threshold);
+    const fresh = matchOne(item, idx, threshold);
+    // Asked for explicitly, so it is allowed to move the mark — but a search
+    // that found nothing must not blank a position the author can still use.
+    item.stale = fresh ? undefined : true;
+    if (fresh) item.match = fresh;
     item.manualLine = undefined;
     item.confirmed = false; // fresh auto-match — back up for review
     this.touch(adocPath);

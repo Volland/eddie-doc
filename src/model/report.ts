@@ -6,7 +6,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { effectiveLine } from "../matching/mapper.js";
+import { effectiveLine, isConfident } from "../matching/mapper.js";
 import { sha256 } from "./format.js";
 import { KIND_LABEL, type ReviewItem, type ReviewSession } from "./types.js";
 
@@ -23,11 +23,6 @@ export interface ReportOptions {
   generatedAt?: string;
 }
 
-/** A link we trust: hand-picked, confirmed, or a high-confidence auto-match. */
-function isConfident(item: ReviewItem, highConf: number): boolean {
-  if (item.manualLine != null || item.confirmed) return true;
-  return (item.match?.score ?? 0) >= highConf;
-}
 
 function clean(s: string): string {
   return s.replace(/\s+/g, " ").trim();

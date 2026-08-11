@@ -2,6 +2,7 @@ import * as assert from "node:assert";
 import {
   mapAnnotations,
   effectiveLine,
+  isConfident,
   type MapStats,
 } from "../matching/mapper.js";
 import type { RawAnnotation, ReviewItem } from "../model/types.js";
@@ -276,20 +277,145 @@ describe("mapAnnotations with source anchors", () => {
     assert.strictEqual(items[0].replies?.[0].body, "Fixed.");
   });
 
-  it("reports a lost anchor and falls back to searching", () => {
-    const gutted = ["= Doc", "", "Reification lets us make statements."].join("\n");
+  it("holds a lost anchor where it was, rather than searching from scratch", () => {
+    // Every tier failed: no marker, no block id, no recognisable fingerprint.
+    // Searching from here is precisely the case that lands on the decoy, so the
+    // item keeps the last place it was known to be and is flagged for a human.
+    const gutted = [
+      "= Doc",
+      "",
+      "Identity is the component the whole book rests on.",
+      "",
+      "The previous chapter looked at agents from the outside and",
+      "classified them by autonomy, architecture and mission.",
+    ].join("\n");
+    const prior = priorWith({ marker: "aaaaaaaa" });
+    prior[0].match = {
+      startLine: 2,
+      endLine: 2,
+      score: 1,
+      method: "marker",
+      sourceExcerpt: "",
+    };
     const stats: MapStats = { carried: 0 };
-    const items = mapAnnotations(
-      [editorsWording],
-      gutted,
-      { threshold: 0.5 },
-      priorWith({ marker: "aaaaaaaa" }),
-      stats
-    );
+    const items = mapAnnotations([editorsWording], gutted, { threshold: 0.5 }, prior, stats);
+
     assert.strictEqual(stats.anchorsLost, 1);
     assert.strictEqual(stats.anchored, 0);
-    // The item is not silently dropped — it still exists to be triaged.
-    assert.strictEqual(items.length, 1);
-    assert.notStrictEqual(items[0].match?.method, "marker");
+    assert.strictEqual(stats.stale, 1);
+    assert.strictEqual(items.length, 1, "never silently dropped");
+    assert.strictEqual(effectiveLine(items[0]), 2, "held, not moved to the decoy");
+    assert.strictEqual(items[0].stale, true);
+  });
+});
+
+/**
+ * The rule that keeps a review honest across a rewrite: **re-matching can only
+ * degrade a link that already exists.** The matcher compares the editor's
+ * original PDF wording against the source as it is now, so once the marked
+ * sentence has been rewritten, the best remaining candidate is some other
+ * paragraph that still shares its vocabulary — a confident wrong answer. These
+ * cases pin what is allowed to move a mark, and what is not.
+ */
+describe("mapAnnotations defends established links", () => {
+  const SHIFTED = ["", "", ...SOURCE.split("\n")].join("\n");
+  const reified = ann("x", {
+    anchoredText: "Reification lets us make statements about statements",
+  });
+
+  /** A prior item linked to `line`, with no anchor and no human judgement on it. */
+  function linkedAt(line: number, score = 1): ReviewItem[] {
+    return [
+      {
+        ...reified,
+        match: { startLine: line, endLine: line, score, method: "fuzzy", sourceExcerpt: "" },
+        resolved: false,
+      } as ReviewItem,
+    ];
+  }
+
+  it("follows the text when an ordinary edit moves it", () => {
+    // Two lines inserted above: the marked sentence is intact, just lower down.
+    const items = mapAnnotations([reified], SHIFTED, { threshold: 0.5 }, linkedAt(4));
+    assert.strictEqual(effectiveLine(items[0]), 6);
+    assert.strictEqual(items[0].stale, undefined, "moving with the text is not staleness");
+  });
+
+  it("refuses to move a mark onto a materially worse match", () => {
+    const rewritten = [
+      "= Doc",
+      "",
+      "Identity is the component the whole book rests on.",
+      "",
+      "Statements about statements are what reification gives us, loosely.",
+    ].join("\n");
+    // Standing link at line 2 scored 1.0 when it was made. The only candidate
+    // left scores far lower — that is evidence the text changed, not evidence
+    // the mark belongs somewhere else.
+    const items = mapAnnotations([reified], rewritten, { threshold: 0.2 }, linkedAt(2));
+    assert.strictEqual(effectiveLine(items[0]), 2, "held at its last known place");
+    assert.strictEqual(items[0].stale, true);
+  });
+
+  it("keeps a position rather than blanking it when the words are gone", () => {
+    const unrelated = ["= Doc", "", "Nothing here resembles the mark at all."].join("\n");
+    const items = mapAnnotations([reified], unrelated, { threshold: 0.9 }, linkedAt(2));
+    assert.strictEqual(effectiveLine(items[0]), 2);
+    assert.strictEqual(items[0].stale, true);
+  });
+
+  it("never re-litigates a link the author placed by hand", () => {
+    const prior = linkedAt(2, 0.4);
+    prior[0].manualLine = 2;
+    const items = mapAnnotations([reified], SHIFTED, { threshold: 0.5 }, prior);
+    // The sentence really is at line 6 now — but the author put this mark on
+    // line 2 and only they get to move it.
+    assert.strictEqual(effectiveLine(items[0]), 2);
+    assert.strictEqual(items[0].match?.startLine, 2, "not re-searched");
+  });
+
+  it("carries a confirmation across a re-map, and does not re-search it", () => {
+    const prior = linkedAt(2, 0.6);
+    prior[0].confirmed = true;
+    const items = mapAnnotations([reified], SHIFTED, { threshold: 0.5 }, prior);
+    assert.strictEqual(items[0].confirmed, true, "the author's vouch survives");
+    assert.strictEqual(items[0].match?.startLine, 2);
+  });
+
+  it("searches freely when there is nothing to protect", () => {
+    const items = mapAnnotations([reified], SHIFTED, { threshold: 0.5 });
+    assert.strictEqual(effectiveLine(items[0]), 6);
+    const stats: MapStats = { carried: 0 };
+    mapAnnotations([reified], SHIFTED, { threshold: 0.5 }, undefined, stats);
+    assert.strictEqual(stats.kept, 0);
+  });
+});
+
+describe("isConfident", () => {
+  function item(over: Partial<ReviewItem> = {}): ReviewItem {
+    return {
+      ...ann("x"),
+      match: { startLine: 1, endLine: 1, score: 0.95, method: "fuzzy", sourceExcerpt: "" },
+      resolved: false,
+      ...over,
+    } as ReviewItem;
+  }
+
+  it("trusts a strong score, a hand-picked line, and a vouch", () => {
+    assert.strictEqual(isConfident(item(), 0.75), true);
+    assert.strictEqual(isConfident(item({ manualLine: 3 }), 0.75), true);
+    assert.strictEqual(isConfident(item({ confirmed: true }), 0.75), true);
+  });
+
+  it("trusts nothing stale, however the link was made", () => {
+    // The position may well still be right — but the text it described has
+    // changed, and only a person can say whether the remark still applies.
+    assert.strictEqual(isConfident(item({ stale: true }), 0.75), false);
+    assert.strictEqual(isConfident(item({ stale: true, manualLine: 3 }), 0.75), false);
+    assert.strictEqual(isConfident(item({ stale: true, confirmed: true }), 0.75), false);
+  });
+
+  it("does not trust a weak auto-match", () => {
+    assert.strictEqual(isConfident(item({ match: null }), 0.75), false);
   });
 });

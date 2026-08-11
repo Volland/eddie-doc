@@ -8,7 +8,7 @@ import {
   mappingLabel,
   revisionLabel,
 } from "../model/types.js";
-import { effectiveLine } from "../matching/mapper.js";
+import { effectiveLine, isConfident } from "../matching/mapper.js";
 import type { ReviewStore } from "../model/store.js";
 
 type Node = GroupNode | ItemNode | MappingNode;
@@ -223,11 +223,6 @@ function mappingTooltip(session: ReviewSession): vscode.MarkdownString {
   return md;
 }
 
-/** A link we trust: hand-picked, confirmed, or a high-confidence auto-match. */
-function isConfident(item: ReviewItem, highConf: number): boolean {
-  if (item.manualLine != null || item.confirmed) return true;
-  return (item.match?.score ?? 0) >= highConf;
-}
 
 /** "line 12 · 0.83" / "line 12 · manual" / "line 12 · semantic 0.71". */
 function locationLabel(item: ReviewItem, line: number): string {
@@ -240,6 +235,9 @@ function locationLabel(item: ReviewItem, line: number): string {
       `${m.method && m.method !== "fuzzy" ? `${m.method} ` : ""}${m.score.toFixed(2)}`
     );
   }
+  // Where it last sat, not where it belongs — say so on the row rather than
+  // letting a number imply a confidence the link no longer has.
+  if (item.stale) parts.push("stale");
   return parts.join(" · ");
 }
 
@@ -257,6 +255,12 @@ function tooltip(item: ReviewItem): vscode.MarkdownString {
   if (item.anchoredText)
     md.appendMarkdown(`> ${item.anchoredText.replace(/\n/g, " ")}\n\n`);
   if (item.comment) md.appendMarkdown(`💬 ${item.comment}\n\n`);
+  if (item.stale)
+    md.appendMarkdown(
+      `⚠️ **Stale** — the text this was linked to has changed, so this is ` +
+        `where the mark last sat, not where it belongs. Confirm it or re-link ` +
+        `it once you have decided whether the remark still applies.\n\n`
+    );
   if (item.match)
     md.appendMarkdown(
       `_match score ${item.match.score.toFixed(2)}_`

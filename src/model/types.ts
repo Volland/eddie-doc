@@ -133,6 +133,17 @@ export interface ReviewItem extends RawAnnotation {
    * confidence/semantic auto-match). Keeps it out of the "Needs review" group.
    */
   confirmed?: boolean;
+  /**
+   * The text this item was linked to is no longer recognisable: its anchor no
+   * longer resolves, or re-matching now scores materially worse than when the
+   * link was made. The item keeps its last known position — moving it on a
+   * degraded match is how a mark ends up confidently pointing at the wrong
+   * paragraph — and is routed to "Needs review" for a human to judge, with the
+   * editor's original words beside it. Vouching for it (Confirm Match) or
+   * re-linking it by hand clears the flag; it is a conclusion about the current
+   * text, so every re-map re-decides it.
+   */
+  stale?: boolean;
   note?: string;
   /** The author's reply thread under this annotation, oldest first. */
   replies?: Reply[];

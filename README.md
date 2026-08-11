@@ -94,6 +94,7 @@ which can come back as more than one annotated PDF from more than one place. See
 | `eddieDoc.matchThreshold` | `0.5` | Minimum similarity (0–1) to auto-link; below this an item is *Unmatched*. |
 | `eddieDoc.highConfidence` | `0.75` | Score at/above which a link is trusted; below it the item lands in *Needs review*. |
 | `eddieDoc.showResolved` | `true` | Show resolved items in the tree and as decorations. |
+| `eddieDoc.autoAnchor` | `true` | Write invisible `// eddie:<id>` markers into the source as soon as a PDF is mapped, so marks are bound to paragraphs instead of line numbers. Off anchors only when you run the command. |
 | `eddieDoc.expandThreads` | `false` | Open every unanswered thread as the document opens. Off keeps the prose readable — open one thread at a time from the gutter icon. |
 | `eddieDoc.inlineMarkers` | `true` | Append `✎ <kind>` at the end of each annotated line. Turn it off if you write with word wrap on and dislike the paragraph re-wrapping around the marker; the line highlight, ruler mark and hover stay. |
 | `eddieDoc.lexicalFallback` | `true` | Rescue unmatched items via built-in character-trigram similarity (no setup needed). |
@@ -379,21 +380,51 @@ Anything that can't be placed is reported, never guessed at.
 
 ### Durable source anchors
 
-Live position tracking follows your edits inside VS Code, but a `sed`, a git
-merge or an agent rewriting a file bypasses it — and afterwards, matching the
-editor's (now outdated) PDF text against rewritten prose produces confident
-wrong answers.
+A line number is a guess about a document that is going to change. A marker *is*
+the binding. Eddie Doc writes invisible `// eddie:<id>` markers above annotated
+blocks, and from then on a mark resolves an identity instead of searching for
+wording that may no longer exist.
 
-**Eddie Doc: Anchor Annotations in Source** writes invisible `// eddie:<id>`
-markers above annotated blocks. A marker lives *in* the text, so it moves with
-the paragraph no matter who edits it; delete the paragraph and the marker goes
-with it, which is the correct outcome. Asciidoctor strips `//` comments before
-rendering, so a marker can never reach the PDF or the file you deliver — the
-marked and unmarked sources render byte-identical text.
+**Anchoring happens when a PDF is mapped** (`eddieDoc.autoAnchor`, on by
+default). That is deliberate: import is the one moment your source still
+resembles what the editor read, so it is the only moment matching can be
+trusted. A marker then travels with its paragraph through anything — your own
+rewrites, a `sed`, a git merge, an agent pass — and if the paragraph is deleted
+the marker goes with it, which is the correct outcome. Asciidoctor strips `//`
+comments before rendering, so a marker can never reach the PDF or the file you
+deliver: the marked and unmarked sources render byte-identical text.
 
-Anchoring is opt-in per chapter and never happens automatically; **Remove Source
-Anchors** (or `eddie-doc strip`) takes them out again. Figures and tables need
-no marker: they anchor to the `[#id]` you already give them.
+The edit is applied as one undoable action and saved immediately, because a
+sidecar that references markers missing from the file would be worse than no
+anchors at all. If you had unsaved changes, the markers are left dirty for you to
+save — your work is not committed on your behalf. **Eddie Doc: Anchor
+Annotations in Source** does the same thing on demand (for mappings made before
+this was automatic, or with `autoAnchor` off), and **Remove Source Anchors** — or
+`eddie-doc strip` — takes them out again. Figures and tables need no marker: they
+anchor to the `[#id]` you already give them.
+
+### When a mark stops describing its text
+
+Re-matching an established link can only make it worse. The matcher compares the
+editor's original PDF wording against your source as it is *now*, so once you
+have rewritten the marked sentence, the strongest remaining candidate is some
+other paragraph that still shares its vocabulary — and moving the mark there is a
+confident wrong answer. So an established link is defended, not recomputed:
+
+| What holds the mark | On every re-map |
+| --- | --- |
+| A line you picked (*Re-link*) | never re-searched |
+| A marker in the text | resolved, not searched |
+| A link you vouched for (*Confirm Match*) | never re-searched |
+| An automatic link | re-searched, but only *moved* by a match at least as good |
+| No link yet | searched freely — nothing to lose |
+
+When nothing holds any more — the anchor stops resolving, or the best match is
+materially worse than the one it would replace — the item keeps its **last known
+place** and is marked **stale**: it appears under *Needs review* with `stale` on
+the row, the editor's original words in the tooltip, and a warning naming how
+many went stale. Nothing relocates quietly. *Confirm Match* or *Re-link* clears
+the flag once you have decided whether the remark still applies.
 
 ## The review sidecar (`.review.json`)
 

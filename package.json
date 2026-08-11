@@ -570,6 +570,11 @@
           "default": true,
           "description": "Show resolved annotations in the tree and as decorations."
         },
+        "eddieDoc.autoAnchor": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write invisible '// eddie:<id>' marker comments into the source as soon as a PDF is mapped, so each mark is bound to its paragraph rather than to a line number. Import is the one moment the source still matches what the editor read, which makes it the only moment matching is reliable; afterwards a marker travels with its paragraph through any rewrite, sed, merge or agent pass. Asciidoctor strips '//' comments, so markers never reach a rendered PDF. Turn it off to anchor by hand with 'Anchor Annotations in Source'."
+        },
         "eddieDoc.inlineMarkers": {
           "type": "boolean",
           "default": true,
