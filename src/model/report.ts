@@ -7,6 +7,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { effectiveLine, isConfident } from "../matching/mapper.js";
+import { commentRef, withoutRef } from "./refs.js";
 import { sha256 } from "./format.js";
 import { KIND_LABEL, type ReviewItem, type ReviewSession } from "./types.js";
 
@@ -49,7 +50,10 @@ function locationLabel(item: ReviewItem): string {
 
 function renderItem(item: ReviewItem): string {
   const head = [
-    `**${KIND_LABEL[item.kind]}**`,
+    // Leads the line, so the editor can find their own numbered query at a glance.
+    commentRef(item.comment)
+      ? `**${commentRef(item.comment)}** ${KIND_LABEL[item.kind]}`
+      : `**${KIND_LABEL[item.kind]}**`,
     `p${item.page}`,
     locationLabel(item),
     item.author ? item.author : undefined,
@@ -58,7 +62,7 @@ function renderItem(item: ReviewItem): string {
     .join(" · ");
 
   const lines = [`- ${head}`];
-  if (item.comment) lines.push(`  > ${quote(item.comment)}`);
+  if (item.comment) lines.push(`  > ${quote(withoutRef(item.comment))}`);
   const marked = item.markedText || item.anchoredText;
   if (marked) lines.push(`  - marked: “${quote(marked, 160)}”`);
   if (item.match?.sourceExcerpt) {

@@ -9,6 +9,7 @@ import {
   revisionLabel,
 } from "../model/types.js";
 import { effectiveLine, isConfident } from "../matching/mapper.js";
+import { commentRef, refPrefix, withoutRef } from "../model/refs.js";
 import type { ReviewStore } from "../model/store.js";
 
 type Node = GroupNode | ItemNode | MappingNode;
@@ -147,7 +148,8 @@ export class AnnotationTreeProvider
     const highConf = vscode.workspace
       .getConfiguration("eddieDoc")
       .get<number>("highConfidence", 0.75);
-    const label = `${KIND_LABEL[item.kind]}: ${snippet(item)}`;
+    // The editor's query number leads: it is how the remark is addressed.
+    const label = `${refPrefix(item)}${KIND_LABEL[item.kind]}: ${snippet(item)}`;
     const ti = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     ti.id = item.id;
     // Needs-review items get a distinct contextValue so the "confirm" action
@@ -242,14 +244,18 @@ function locationLabel(item: ReviewItem, line: number): string {
 }
 
 function snippet(item: ReviewItem): string {
-  const text = item.comment || item.anchoredText || "(no text)";
+  // Hoisted into the label already, so it does not spend the 60 characters here.
+  const text = withoutRef(item.comment) || item.anchoredText || "(no text)";
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > 60 ? clean.slice(0, 60) + "…" : clean;
 }
 
 function tooltip(item: ReviewItem): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
-  md.appendMarkdown(`**${KIND_LABEL[item.kind]}** · page ${item.page}`);
+  const ref = commentRef(item.comment);
+  md.appendMarkdown(
+    `${ref ? `**${ref}** · ` : ""}**${KIND_LABEL[item.kind]}** · page ${item.page}`
+  );
   if (item.author) md.appendMarkdown(` · _${item.author}_`);
   md.appendMarkdown("\n\n");
   if (item.anchoredText)

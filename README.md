@@ -17,6 +17,12 @@ become navigable, resolvable review items right in the editor.
 - **Maps** each annotation to a source line using fuzzy text matching that
   strips AsciiDoc syntax first, so a highlighted phrase lines up with your
   markup-laden source. Works with Unicode text (incl. Cyrillic).
+- **Leads with the editor's query number.** When a comment carries a reference
+  like `[12]`, `[C7]` or `[AU 3] `, that number is hoisted to the front of every
+  label — tree row, inline marker, hover, comment thread, Problems entry, report
+  — because it is how the remark gets discussed, and a trailing `[12]` was the
+  first thing lost when a label was truncated. The comment is stored exactly as
+  the editor wrote it; only the display moves the number.
 - **Shows** annotations four ways:
   - an **activity-bar tree** grouped into *Open / Unmatched / Resolved*,
   - **inline decorations** on the affected source lines with a hover showing the

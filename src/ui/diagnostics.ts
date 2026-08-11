@@ -4,6 +4,7 @@ import { KIND_LABEL } from "../model/types.js";
 import { effectiveLine } from "../matching/mapper.js";
 import type { ReviewStore } from "../model/store.js";
 import { isAdocDoc } from "../util.js";
+import { commentRef, withoutRef } from "../model/refs.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 const SOURCE = "Eddie Doc";
@@ -72,8 +73,10 @@ export class DiagnosticsManager {
 }
 
 function message(item: ReviewItem): string {
-  const parts = [`[${KIND_LABEL[item.kind]}]`];
-  if (item.comment) parts.push(item.comment);
+  const ref = commentRef(item.comment);
+  // Diagnostics are read as a flat list, often narrow — the number goes first.
+  const parts = [ref ? `${ref} [${KIND_LABEL[item.kind]}]` : `[${KIND_LABEL[item.kind]}]`];
+  if (item.comment) parts.push(withoutRef(item.comment));
   else if (item.anchoredText)
     parts.push(`“${item.anchoredText.slice(0, 80)}”`);
   if (item.author) parts.push(`— ${item.author}`);

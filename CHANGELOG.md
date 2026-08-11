@@ -57,6 +57,17 @@ than recomputed, and bound to the text itself the moment a PDF is mapped.
   a git buffer can no longer masquerade as the `.adoc`.
 
 ### Added
+- **The editor's query number leads every label.** Copyeditors number their
+  queries — `[12]`, `[C7]`, `[AU 3]` — and then discuss them by number, so that
+  number is how a remark is addressed. It can sit anywhere in the comment, and
+  every label here is length-capped, which made a trailing `[12]` the first
+  casualty of truncation. It is now lifted to the front of the tree row, the
+  inline marker, the hover, the comment thread header and body, the Problems
+  entry and the report, and removed from the prose beside it so it is never
+  printed twice. The pattern is deliberately narrow — it must contain a digit and
+  stay short — so a comment quoting `[source,ruby]` or `[#anchor]` never gets
+  markup promoted to a heading. The sidecar still stores the comment exactly as
+  the editor wrote it.
 - **Anchoring on import** (`eddieDoc.autoAnchor`, on by default). Invisible
   `// eddie:<id>` markers are written into the source as soon as a PDF is
   mapped, because import is the one moment the source still resembles what the

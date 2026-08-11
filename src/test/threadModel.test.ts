@@ -93,6 +93,15 @@ describe("rootMarkdown", () => {
     assert.ok(md.startsWith("> come due here\n\n"));
   });
 
+  it("promotes the query number and does not print it twice", () => {
+    const md = rootMarkdown(item({ comment: "Please check this citation. [12]" }));
+    assert.strictEqual(
+      md,
+      "> Two debts from earlier chapters come due here.\n\n" +
+        "**[12]** Please check this citation."
+    );
+  });
+
   it("stands in for a mark with no note", () => {
     assert.strictEqual(
       rootMarkdown(item({ comment: "", anchoredText: "" })),
@@ -123,6 +132,15 @@ describe("threadLabel", () => {
     assert.strictEqual(
       threadLabel(item({ replies: [reply(), reply({ id: "r2" })] })),
       "Highlight · p3 · 0.87 · 2 replies"
+    );
+  });
+
+  it("leads with the editor's query number when there is one", () => {
+    // The header is the only part of a collapsed thread that stays visible, so
+    // the number the editor will quote has to be the first thing in it.
+    assert.strictEqual(
+      threadLabel(item({ comment: "Please check this citation. [12]" })),
+      "[12] · Highlight · p3 · 0.87"
     );
   });
 

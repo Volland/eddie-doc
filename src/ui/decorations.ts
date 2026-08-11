@@ -4,6 +4,7 @@ import { KIND_LABEL } from "../model/types.js";
 import { effectiveLine } from "../matching/mapper.js";
 import type { ReviewStore } from "../model/store.js";
 import { isAdocDoc } from "../util.js";
+import { commentRef, refPrefix, withoutRef } from "../model/refs.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 
@@ -91,12 +92,19 @@ export class DecorationManager {
 function summarize(items: ReviewItem[]): string {
   if (items.length === 1) {
     const it = items[0];
-    const c = (it.comment || it.anchoredText || "").replace(/\s+/g, " ").trim();
-    return `${KIND_LABEL[it.kind]}${c ? `: ${c.slice(0, 50)}` : ""}${
+    const c = (withoutRef(it.comment) || it.anchoredText || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return `${refPrefix(it)}${KIND_LABEL[it.kind]}${c ? `: ${c.slice(0, 50)}` : ""}${
       c.length > 50 ? "…" : ""
     }`;
   }
-  return `${items.length} annotations`;
+  // Several marks on one line: lead with their numbers, which is how the author
+  // will look them up — "3 annotations" says nothing addressable.
+  const refs = items.map((i) => commentRef(i.comment)).filter(Boolean);
+  return refs.length
+    ? `${refs.join(" ")} — ${items.length} annotations`
+    : `${items.length} annotations`;
 }
 
 function buildHover(items: ReviewItem[]): vscode.MarkdownString {
@@ -104,13 +112,14 @@ function buildHover(items: ReviewItem[]): vscode.MarkdownString {
   md.isTrusted = true;
   for (const it of items) {
     md.appendMarkdown(
-      `**${KIND_LABEL[it.kind]}**${it.author ? ` · _${it.author}_` : ""}${
+      `${commentRef(it.comment) ? `**${commentRef(it.comment)}** · ` : ""}` +
+        `**${KIND_LABEL[it.kind]}**${it.author ? ` · _${it.author}_` : ""}${
         it.resolved ? " · ✅ resolved" : ""
       }${it.stale ? " · ⚠️ stale" : ""} · p${it.page}\n\n`
     );
     if (it.anchoredText)
       md.appendMarkdown(`> ${it.anchoredText.replace(/\n/g, " ")}\n\n`);
-    if (it.comment) md.appendMarkdown(`💬 ${it.comment}\n\n`);
+    if (it.comment) md.appendMarkdown(`💬 ${withoutRef(it.comment)}\n\n`);
     const toggle = vscode.Uri.parse(
       `command:eddieDoc.toggleResolved?${encodeURIComponent(
         JSON.stringify([it.id])

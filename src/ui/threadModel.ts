@@ -9,10 +9,17 @@
  * `vscode`, so it is directly testable.
  */
 import { KIND_LABEL, type ReviewItem } from "../model/types.js";
+import { commentRef, withoutRef } from "../model/refs.js";
 
-/** Header line for the thread: kind, page, and how the link was established. */
+/**
+ * Header line for the thread: the editor's query number, kind, page, and how
+ * the link was established. The number leads — it is what the author quotes
+ * back when answering, and the header is the only always-visible part of a
+ * collapsed thread.
+ */
 export function threadLabel(item: ReviewItem): string {
-  const bits = [KIND_LABEL[item.kind], `p${item.page}`];
+  const ref = commentRef(item.comment);
+  const bits = [...(ref ? [ref] : []), KIND_LABEL[item.kind], `p${item.page}`];
   const m = item.match?.method;
   if (item.manualLine != null) bits.push("manual");
   else if (m === "marker" || m === "blockId" || m === "fingerprint")
@@ -29,7 +36,9 @@ export function rootMarkdown(item: ReviewItem): string {
     .replace(/\s+/g, " ")
     .trim();
   const quote = marked ? `> ${marked.slice(0, 400)}\n\n` : "";
-  return quote + (item.comment || `_${KIND_LABEL[item.kind]} with no note._`);
+  const ref = commentRef(item.comment);
+  const note = withoutRef(item.comment) || `_${KIND_LABEL[item.kind]} with no note._`;
+  return quote + (ref ? `**${ref}** ${note}` : note);
 }
 
 /** Byline under the mark. Falls back to the role, since the PDF may name nobody. */
