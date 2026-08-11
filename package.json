@@ -570,6 +570,11 @@
           "default": true,
           "description": "Show resolved annotations in the tree and as decorations."
         },
+        "eddieDoc.expandThreads": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open every unanswered annotation's comment thread as soon as the document opens. Off by default: each open thread is a box wedged between two lines of prose, so a chapter with thirty marks becomes unreadable and every click re-lays out the page. Leave it off and open threads one at a time from the gutter icon."
+        },
         "eddieDoc.highConfidence": {
           "type": "number",
           "default": 0.75,

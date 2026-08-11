@@ -293,6 +293,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration("eddieDoc.reviewFolder")) {
         void loadWorkspaceSidecars(store).then(refreshUI);
       }
+      // Only decided when a thread is first created, so reconciling would not
+      // show it: rebuild so the toggle lands immediately.
+      if (e.affectsConfiguration("eddieDoc.expandThreads")) comments.rebuildAll();
       refreshUI();
     }),
     // Re-map on save so annotation positions stay correct after edits (e.g.

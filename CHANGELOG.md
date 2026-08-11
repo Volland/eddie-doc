@@ -5,6 +5,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Comment threads start collapsed.** Every unanswered mark used to open its
+  thread as the document opened, on the theory that the work still to do should
+  be what you see. At one mark per chapter that reads well; at thirty it buries
+  the prose in boxes, and — with word wrap on, as prose usually is — clicking any
+  one of them re-lays out the page under the cursor, so the click misses the
+  reply box. The gutter icon, the end-of-line marker and the tree already say
+  where the work is. `eddieDoc.expandThreads` restores the old behaviour.
+
 ### Fixed
 - **Replies could not be typed.** Clicking into a thread's reply box reflowed
   everything and threw the box away. Three things were tearing the widget down:

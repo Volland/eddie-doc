@@ -88,6 +88,16 @@ export class ReviewCommentController {
     for (const doc of this.store.documents()) this.sync(doc);
   }
 
+  /**
+   * Throw every thread away and build again. Only for changes that alter how a
+   * thread is *created* — `expandThreads` — where reconciling would leave the
+   * setting with no visible effect until the next document open.
+   */
+  rebuildAll(): void {
+    for (const path of [...this.byDoc.keys()]) this.disposeDoc(path);
+    this.refresh();
+  }
+
   /** Swap a reply into its in-place editor, in the popup where it already is. */
   beginEdit(comment: ReviewComment): void {
     if (!comment?.replyId) return;
@@ -136,9 +146,9 @@ export class ReviewCommentController {
       return;
     }
     const uri = vscode.Uri.file(adocPath);
-    const showResolved = vscode.workspace
-      .getConfiguration("eddieDoc")
-      .get<boolean>("showResolved", true);
+    const config = vscode.workspace.getConfiguration("eddieDoc");
+    const showResolved = config.get<boolean>("showResolved", true);
+    const expand = config.get<boolean>("expandThreads", false);
 
     const entries = this.byDoc.get(adocPath) ?? new Map<string, ThreadEntry>();
     const live = new Set<string>();
@@ -150,7 +160,7 @@ export class ReviewCommentController {
 
       const existing = entries.get(item.id);
       if (existing) reconcile(existing, item, adocPath, line);
-      else entries.set(item.id, this.create(uri, item, adocPath, line));
+      else entries.set(item.id, this.create(uri, item, adocPath, line, expand));
     }
     // Only threads whose annotation is gone (or now filtered out) go away.
     for (const [id, entry] of [...entries]) {
@@ -165,7 +175,8 @@ export class ReviewCommentController {
     uri: vscode.Uri,
     item: ReviewItem,
     adocPath: string,
-    line: number
+    line: number,
+    expand: boolean
   ): ThreadEntry {
     const thread = this.controller.createCommentThread(
       uri,
@@ -178,13 +189,17 @@ export class ReviewCommentController {
     thread.contextValue = "eddieDoc.thread";
     thread.canReply = true;
     thread.state = threadState(item);
-    // Collapse resolved threads and anything already answered; leave open,
-    // unanswered marks expanded so the work still to do is what you see. This
-    // is a first impression only — from here the disclosure state is the user's.
+    // Collapsed unless asked otherwise. An open thread is a box wedged between
+    // two lines of prose: expand thirty of them and the chapter is unreadable,
+    // every one of them shifts when any one is clicked, and with word wrap on
+    // the page re-lays out under the cursor mid-click. The gutter icon, the
+    // end-of-line marker and the tree all say where the work is; the reader
+    // opens the one thread they mean to answer. Beyond this first impression,
+    // the disclosure state is the user's and is never written again.
     thread.collapsibleState =
-      item.resolved || (item.replies?.length ?? 0) > 0
-        ? vscode.CommentThreadCollapsibleState.Collapsed
-        : vscode.CommentThreadCollapsibleState.Expanded;
+      expand && !item.resolved && (item.replies?.length ?? 0) === 0
+        ? vscode.CommentThreadCollapsibleState.Expanded
+        : vscode.CommentThreadCollapsibleState.Collapsed;
     return entry;
   }
 
