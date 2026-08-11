@@ -400,6 +400,11 @@ the marker goes with it, which is the correct outcome. Asciidoctor strips `//`
 comments before rendering, so a marker can never reach the PDF or the file you
 deliver: the marked and unmarked sources render byte-identical text.
 
+If agents edit your manuscript, tell them about the markers:
+[`docs/MANUSCRIPT-CLAUDE.md`](docs/MANUSCRIPT-CLAUDE.md) is a block to paste into
+the `CLAUDE.md` of your manuscript repo. An agent that strips anchors breaks
+nothing visible — the damage only appears at the next re-map.
+
 The edit is applied as one undoable action and saved immediately, because a
 sidecar that references markers missing from the file would be worse than no
 anchors at all. If you had unsaved changes, the markers are left dirty for you to
