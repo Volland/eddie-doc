@@ -43,9 +43,13 @@ export class DecorationManager {
       editor.setDecorations(this.resolved, []);
       return;
     }
-    const showResolved = vscode.workspace
-      .getConfiguration("eddieDoc")
-      .get<boolean>("showResolved", true);
+    const config = vscode.workspace.getConfiguration("eddieDoc");
+    const showResolved = config.get<boolean>("showResolved", true);
+    // The end-of-line label sits *in* the line, so it counts toward where the
+    // line wraps. In wrapped prose that means an annotated paragraph re-wraps
+    // when a marker appears, moves or changes width. Turning it off keeps the
+    // line highlight, the ruler mark and the hover, and leaves the text alone.
+    const inlineMarkers = config.get<boolean>("inlineMarkers", true);
 
     // Group items by line so a line with several notes gets one combined marker.
     const byLine = new Map<number, ReviewItem[]>();
@@ -67,8 +71,10 @@ export class DecorationManager {
       const label = summarize(items);
       const deco: vscode.DecorationOptions = {
         range,
-        renderOptions: { after: { contentText: `  ✎ ${label}` } },
         hoverMessage: buildHover(items),
+        ...(inlineMarkers
+          ? { renderOptions: { after: { contentText: `  ✎ ${label}` } } }
+          : {}),
       };
       (allResolved ? resolvedDecos : openDecos).push(deco);
     }

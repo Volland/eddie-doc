@@ -570,6 +570,11 @@
           "default": true,
           "description": "Show resolved annotations in the tree and as decorations."
         },
+        "eddieDoc.inlineMarkers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Append a '✎ <kind>' marker at the end of each annotated line. The marker occupies room in the line, so in wrapped prose an annotated paragraph re-wraps when one appears or changes. Turn it off to keep the line highlight, the ruler mark and the hover without touching how the text lays out."
+        },
         "eddieDoc.expandThreads": {
           "type": "boolean",
           "default": false,

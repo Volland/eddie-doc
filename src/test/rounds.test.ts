@@ -225,4 +225,70 @@ describe("review rounds, end to end", function () {
       assert.ok(s.integrity?.sourceSha256, "each round re-fingerprints the source");
     }
   });
+
+  it("announces a re-map once for the document, not once per round", async () => {
+    await store.loadReview(adocPath, SAMPLE_PDF, {
+      threshold: 0.5,
+      revision: { id: "rev-1", ordinal: 1 },
+    });
+    await store.loadReview(adocPath, SAMPLE_PDF, {
+      threshold: 0.5,
+      revision: store.nextRevision(adocPath),
+    });
+    const active = store.get(adocPath)?.sidecarPath;
+    fs.writeFileSync(
+      adocPath,
+      "// added\n\n" + fs.readFileSync(adocPath, "utf8"),
+      "utf8"
+    );
+
+    // Every change event rebuilds the tree, the decorations and the comment
+    // threads. Firing per round made the UI rebuild N times per save — and
+    // render whichever round the loop had made active on the way past.
+    let events = 0;
+    store.onDidChange(() => events++);
+    await store.remapAll(adocPath, 0.5);
+    assert.strictEqual(events, 1);
+    assert.strictEqual(
+      store.get(adocPath)?.sidecarPath,
+      active,
+      "re-mapping the rounds leaves the one on screen on screen"
+    );
+  });
+
+  it("skips the automatic re-map when the text has not moved", async () => {
+    await store.loadReview(adocPath, SAMPLE_PDF, {
+      threshold: 0.5,
+      revision: { id: "rev-1", ordinal: 1 },
+    });
+    const sidecar = store.get(adocPath)!.sidecarPath;
+    const written = fs.statSync(sidecar).mtimeMs;
+    const stamp = store.get(adocPath)!.updatedAt;
+
+    // What autosave delivers: a save carrying no text change at all.
+    let events = 0;
+    store.onDidChange(() => events++);
+    const n = await store.remapAll(adocPath, 0.5, { onlyIfSourceChanged: true });
+
+    assert.strictEqual(n, 0, "nothing to re-derive");
+    assert.strictEqual(events, 0, "so nothing to redraw");
+    assert.strictEqual(store.get(adocPath)!.updatedAt, stamp);
+    assert.strictEqual(
+      fs.statSync(sidecar).mtimeMs,
+      written,
+      "the sidecar is left untouched"
+    );
+
+    // A real edit still gets re-mapped.
+    fs.writeFileSync(
+      adocPath,
+      "// added\n\n" + fs.readFileSync(adocPath, "utf8"),
+      "utf8"
+    );
+    assert.strictEqual(
+      await store.remapAll(adocPath, 0.5, { onlyIfSourceChanged: true }),
+      1
+    );
+    assert.strictEqual(events, 1);
+  });
 });

@@ -5,6 +5,31 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Editing shook the page.** Typing in a mapped `.adoc` rebuilt the UI far more
+  often than it needed to, and the rebuilds were visible as the text jumping
+  under the cursor.
+  - The save-time re-map ran on every save. With autosave on, "on save" means
+    *every second while you type* — and each pass re-ran the matcher over every
+    round, rewrote every sidecar and refreshed the whole UI. It is now debounced
+    to a pause in typing, and skipped entirely when the text is byte-for-byte
+    what those positions were already matched against.
+  - `remapAll` fired a change event **per round**, so a document with three
+    mappings rebuilt the tree, the decorations and the comment threads three
+    times per save. Worse, it made each round active in turn as it went, so the
+    UI rendered every round on the way past before settling back. One event per
+    document now, and the round on screen stays on screen.
+  - Markers and problems were re-applied on every keystroke. An end-of-line
+    marker takes up room in the line, so re-applying it mid-word re-wraps the
+    paragraph being typed into. Redraws now settle 200 ms after the last
+    keystroke; anchor tracking itself still happens per keystroke, as it must.
+
+### Added
+- `eddieDoc.inlineMarkers` (default on) — turn off the `✎ <kind>` label at the
+  end of each annotated line. It occupies room in the line, so in wrapped prose
+  the paragraph re-wraps when a marker appears or changes width. Off keeps the
+  line highlight, the overview-ruler mark and the hover.
+
 ### Changed
 - **Comment threads start collapsed.** Every unanswered mark used to open its
   thread as the document opened, on the theory that the work still to do should

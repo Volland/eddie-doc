@@ -497,7 +497,56 @@ export class ReviewStore {
   async remap(adocPath: string, threshold: number): Promise<void> {
     const session = this.get(adocPath);
     if (!session) return;
-    const sourceBytes = fs.readFileSync(adocPath);
+    await this.remapSession(session, threshold, false);
+    this._onDidChange.fire(adocPath);
+  }
+
+  /**
+   * Re-map every loaded mapping of a document, not just the active one, and
+   * report how many were re-derived.
+   *
+   * `onlyIfSourceChanged` is for the automatic pass on save: with autosave on,
+   * "on save" means "every second while the author types", and each pass used to
+   * re-run the matcher over every round and rewrite every sidecar even when the
+   * text was byte-for-byte what those positions were already matched against.
+   */
+  async remapAll(
+    adocPath: string,
+    threshold: number,
+    opts: { onlyIfSourceChanged?: boolean } = {}
+  ): Promise<number> {
+    let remapped = 0;
+    for (const s of this.sessionsFor(adocPath)) {
+      const did = await this.remapSession(
+        s,
+        threshold,
+        opts.onlyIfSourceChanged ?? false
+      );
+      if (did) remapped++;
+    }
+    // One event for the document, not one per round. Firing per round meant the
+    // tree, the decorations and the comment threads rebuilt N times per save —
+    // and, while the loop was walking the rounds, rendered whichever round it
+    // had made active on the way past. That is what made the UI jump.
+    if (remapped > 0) this._onDidChange.fire(adocPath);
+    return remapped;
+  }
+
+  /**
+   * Re-derive one mapping's positions from the source on disk. Silent by
+   * design: the caller decides when — and how often — the UI hears about it.
+   * Returns whether anything was re-mapped.
+   */
+  private async remapSession(
+    session: ReviewSession,
+    threshold: number,
+    skipUnchangedSource: boolean
+  ): Promise<boolean> {
+    const sourceBytes = fs.readFileSync(session.adocPath);
+    const sha = sha256(new Uint8Array(sourceBytes));
+    if (skipUnchangedSource && session.integrity?.sourceSha256 === sha) {
+      return false;
+    }
     const source = sourceBytes.toString("utf8");
     const raw = session.items.map(toRaw);
     const items = mapAnnotations(raw, source, { threshold }, session.items);
@@ -507,24 +556,11 @@ export class ReviewStore {
     session.updatedAt = new Date().toISOString();
     session.integrity = {
       ...session.integrity,
-      sourceSha256: sha256(new Uint8Array(sourceBytes)),
+      sourceSha256: sha,
       sourceBytes: sourceBytes.length,
     } satisfies SessionIntegrity;
     this.persist(session);
-    this._onDidChange.fire(adocPath);
-  }
-
-  /** Re-map every loaded mapping of a document, not just the active one. */
-  async remapAll(adocPath: string, threshold: number): Promise<number> {
-    const sessions = this.sessionsFor(adocPath);
-    const active = this.get(adocPath);
-    for (const s of sessions) {
-      this.activeByDoc.set(path.resolve(adocPath), s.sidecarPath);
-      await this.remap(adocPath, threshold);
-    }
-    if (active) this.activeByDoc.set(path.resolve(adocPath), active.sidecarPath);
-    this._onDidChange.fire(adocPath);
-    return sessions.length;
+    return true;
   }
 
   /**

@@ -263,7 +263,31 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
-  let treeRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  // Two debounces, because typing generates far more events than it generates
+  // work worth doing. `live` coalesces the in-editor feedback that follows the
+  // cursor (markers, problems, tree labels); `remap` coalesces the expensive
+  // pass that re-derives every round's positions from the text and rewrites its
+  // sidecar. Both settle on a pause rather than firing per keystroke.
+  const LIVE_QUIET_MS = 200;
+  const REMAP_QUIET_MS = 1200;
+  let liveRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const remapTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** Re-map `adocPath` once the author stops typing, and only if the text moved. */
+  function scheduleRemap(adocPath: string): void {
+    const pending = remapTimers.get(adocPath);
+    if (pending) clearTimeout(pending);
+    remapTimers.set(
+      adocPath,
+      setTimeout(() => {
+        remapTimers.delete(adocPath);
+        // Autosave saves on a timer, so most of these saves carry no text change
+        // at all; the store skips those instead of rewriting every sidecar.
+        void store.remapAll(adocPath, threshold(), { onlyIfSourceChanged: true });
+      }, REMAP_QUIET_MS)
+    );
+  }
+
   function refreshUI() {
     tree.refresh();
     decorations.update(vscode.window.activeTextEditor);
@@ -300,17 +324,20 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     // Re-map on save so annotation positions stay correct after edits (e.g.
     // after inserting a note line, which shifts everything below it).
-    vscode.workspace.onDidSaveTextDocument(async (doc) => {
+    vscode.workspace.onDidSaveTextDocument((doc) => {
       // Every round maps into the same text, so an edit invalidates all of
       // them — re-map the lot, not just the one currently on screen.
       if (isAdocDoc(doc) && store.get(doc.uri.fsPath)) {
-        await store.remapAll(doc.uri.fsPath, threshold());
+        scheduleRemap(doc.uri.fsPath);
       }
     }),
     // Live position tracking: shift annotation anchors with the text as the user
     // types so every command stays addressable *between* saves (the save-time
-    // remap then reconciles by content). Decorations/diagnostics update at once;
-    // the tree label refresh is debounced to avoid churn while typing.
+    // remap then reconciles by content). The shift itself is bookkeeping and
+    // happens per keystroke; redrawing is what costs, so it waits for a pause.
+    // An end-of-line marker changes where a line wraps, so re-applying markers
+    // mid-word re-wraps the paragraph being typed into — the text jumps under
+    // the cursor. Once the author stops, it settles exactly once.
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (!isAdocDoc(e.document) || e.contentChanges.length === 0) return;
       if (!store.get(e.document.uri.fsPath)) return;
@@ -320,14 +347,26 @@ export function activate(context: vscode.ExtensionContext): void {
         newLineCount: countNewlines(c.text),
       }));
       if (!store.shiftPositions(e.document.uri.fsPath, changes)) return;
-      const ed = vscode.window.visibleTextEditors.find(
-        (v) => v.document === e.document
-      );
-      decorations.update(ed);
-      diagnostics.update(e.document);
-      if (treeRefreshTimer) clearTimeout(treeRefreshTimer);
-      treeRefreshTimer = setTimeout(() => tree.refresh(), 300);
-    })
+      if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+      liveRefreshTimer = setTimeout(() => {
+        liveRefreshTimer = undefined;
+        const ed = vscode.window.visibleTextEditors.find(
+          (v) => v.document === e.document
+        );
+        decorations.update(ed);
+        diagnostics.update(e.document);
+        tree.refresh();
+      }, LIVE_QUIET_MS);
+    }),
+    // Timers outlive the events that scheduled them; a pending redraw or re-map
+    // must not fire into a torn-down UI.
+    {
+      dispose: () => {
+        if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+        for (const t of remapTimers.values()) clearTimeout(t);
+        remapTimers.clear();
+      },
+    }
   );
 
   // ---- Commands -----------------------------------------------------------

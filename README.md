@@ -95,6 +95,7 @@ which can come back as more than one annotated PDF from more than one place. See
 | `eddieDoc.highConfidence` | `0.75` | Score at/above which a link is trusted; below it the item lands in *Needs review*. |
 | `eddieDoc.showResolved` | `true` | Show resolved items in the tree and as decorations. |
 | `eddieDoc.expandThreads` | `false` | Open every unanswered thread as the document opens. Off keeps the prose readable — open one thread at a time from the gutter icon. |
+| `eddieDoc.inlineMarkers` | `true` | Append `✎ <kind>` at the end of each annotated line. Turn it off if you write with word wrap on and dislike the paragraph re-wrapping around the marker; the line highlight, ruler mark and hover stay. |
 | `eddieDoc.lexicalFallback` | `true` | Rescue unmatched items via built-in character-trigram similarity (no setup needed). |
 | `eddieDoc.lexicalThreshold` | `0.6` | Minimum trigram-containment score for a lexical rescue. |
 | `eddieDoc.semanticFallback` | `false` | Rescue unmatched items via a local embedding model served by Ollama. |
