@@ -48,7 +48,7 @@ export const FORMAT_VERSION = 3 as const;
  * from package.json by `scripts/sync-producer.mjs`, which runs as npm's
  * "version" lifecycle hook during a release bump — do not edit it by hand.
  */
-export const PRODUCER = { name: "eddie-doc", version: "1.1.5" } as const;
+export const PRODUCER = { name: "eddie-doc", version: "1.1.6" } as const;
 
 // ---------------------------------------------------------------------------
 // On-disk document shape (version 3)
