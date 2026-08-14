@@ -27,7 +27,12 @@
  */
 import { createHash } from "node:crypto";
 import type { MatchMethod, SourceAnchor } from "../model/types.js";
-import { isStructuralLine, normalizeText } from "../matching/normalize.js";
+import {
+  isStructuralLine,
+  isVerbatimDelimiter,
+  normalizeText,
+  verbatimLineFlags,
+} from "../matching/normalize.js";
 import { buildBlocks } from "../matching/semantic.js";
 
 /** A marker comment line: `// eddie:a3f21c94`. */
@@ -64,8 +69,12 @@ export interface MarkerHit {
  */
 export function findMarkers(source: string): Map<string, MarkerHit> {
   const lines = source.split(/\r?\n/);
+  // A marker-shaped line inside a listing is source code the editor may well
+  // have marked up; believing it would bind an item to text nobody anchored.
+  const verbatim = verbatimLineFlags(lines);
   const out = new Map<string, MarkerHit>();
   for (let i = 0; i < lines.length; i++) {
+    if (verbatim[i]) continue;
     const m = MARKER_RE.exec(lines[i]);
     if (!m) continue;
     const id = m[1];
@@ -75,13 +84,12 @@ export function findMarkers(source: string): Map<string, MarkerHit> {
   return out;
 }
 
-/** Source with every marker comment removed. */
+/** Source with every marker comment removed, leaving code samples alone. */
 export function stripMarkers(source: string): string {
   const eol = source.includes("\r\n") ? "\r\n" : "\n";
-  return source
-    .split(/\r?\n/)
-    .filter((l) => !isMarkerLine(l))
-    .join(eol);
+  const lines = source.split(/\r?\n/);
+  const verbatim = verbatimLineFlags(lines);
+  return lines.filter((l, i) => verbatim[i] || !isMarkerLine(l)).join(eol);
 }
 
 /**
@@ -95,6 +103,9 @@ function contentLineAfter(lines: string[], from: number): number {
     if (t === "") continue;
     if (isMarkerLine(lines[i])) continue;
     if (isAttachedAttribute(t)) continue;
+    // Walking down from a marker, the first delimiter met is a block *opening*.
+    // The content it anchors is the block's first line, not the fence.
+    if (isVerbatimDelimiter(t)) continue;
     return i;
   }
   return Math.min(from + 1, Math.max(0, lines.length - 1));
@@ -121,11 +132,20 @@ function isAttachedAttribute(trimmed: string): boolean {
  */
 export function insertionLineFor(lines: string[], line: number): number {
   let i = Math.max(0, Math.min(line, lines.length - 1));
-  // Up to the start of the contiguous prose run.
-  while (i > 0) {
-    const prev = lines[i - 1];
-    if (prev.trim() === "" || isStructuralLine(prev)) break;
-    i--;
+  // A mark on a code sample resolves *inside* a listing, where `//` is content:
+  // a marker written there is rendered as code and ships in the PDF. Climb out
+  // to above the opening delimiter, and let the loops below carry on past the
+  // `[source,go]` attribute line that belongs to it.
+  const verbatim = verbatimLineFlags(lines);
+  if (verbatim[i]) {
+    while (i > 0 && verbatim[i - 1]) i--;
+  } else {
+    // Up to the start of the contiguous prose run.
+    while (i > 0) {
+      const prev = lines[i - 1];
+      if (prev.trim() === "" || isStructuralLine(prev)) break;
+      i--;
+    }
   }
   // Then up past attributes, titles and any marker already sitting there.
   while (i > 0) {

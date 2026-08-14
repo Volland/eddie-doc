@@ -265,6 +265,68 @@ describe("resolveAnchor", () => {
   });
 });
 
+/**
+ * A chapter with a code sample in it — routine in a technical book, and the one
+ * place `//` is content rather than a comment. A marker written inside a listing
+ * is rendered as code and ships in the delivered PDF.
+ */
+const WITH_LISTING = [
+  "= Chapter", // 0
+  "", // 1
+  "Prose before the sample.", // 2
+  "", // 3
+  "[source,go]", // 4
+  "----", // 5
+  "func main() {", // 6
+  "  // eddie:deadbeef", // 7  ← code, not an anchor
+  '  fmt.Println("hi")', // 8
+  "}", // 9
+  "----", // 10
+  "", // 11
+  "Prose after.", // 12
+].join("\n");
+
+describe("verbatim blocks", () => {
+  it("does not read a marker-shaped line inside a listing", () => {
+    // Believing this would bind an item to code nobody anchored — and would
+    // also convince injectMarkers the block is already anchored.
+    assert.strictEqual(findMarkers(WITH_LISTING).size, 0);
+  });
+
+  it("never writes a marker inside a listing", () => {
+    const res = injectMarkers(WITH_LISTING, [{ itemId: "x1", line: 6 }]);
+    const out = res.source.split("\n");
+    const at = out.findIndex(isMarkerLine);
+    assert.strictEqual(res.inserted, 1);
+    // Above the [source,go] attribute line, not between the fences.
+    assert.strictEqual(out[at + 1], "[source,go]");
+    assert.strictEqual(out[at + 2], "----");
+  });
+
+  it("anchors a marked listing to its first line of code", () => {
+    const res = injectMarkers(WITH_LISTING, [{ itemId: "x1", line: 6 }]);
+    const id = res.assigned.get("x1")!;
+    const hit = findMarkers(res.source).get(id)!;
+    assert.strictEqual(res.source.split("\n")[hit.targetLine], "func main() {");
+  });
+
+  it("leaves marker-shaped code alone when stripping", () => {
+    assert.strictEqual(stripMarkers(WITH_LISTING), WITH_LISTING);
+  });
+
+  it("still strips real markers around a listing", () => {
+    const withBoth = injectMarkers(WITH_LISTING, [{ itemId: "x1", line: 6 }]).source;
+    assert.strictEqual(stripMarkers(withBoth), WITH_LISTING);
+  });
+
+  it("treats prose-holding delimited blocks as prose", () => {
+    // An example block is not verbatim: a `//` line inside it really is a
+    // comment, and Asciidoctor really does strip it.
+    const example = ["====", "// eddie:feedface", "Inside an example.", "===="].join("\n");
+    assert.strictEqual(findMarkers(example).size, 1);
+  });
+});
+
 describe("describeAnchor", () => {
   it("captures block id, fingerprint and surrounding context", () => {
     const a = describeAnchor(DOC, 10, "feedface");

@@ -35,6 +35,59 @@ export function isStructuralLine(line: string): boolean {
 }
 
 /**
+ * The delimiter character opening a *verbatim* block — one whose body is
+ * content, not markup: listing (`----`), literal (`....`), passthrough (`++++`)
+ * and fenced code (```` ``` ````).
+ *
+ * Example (`====`), sidebar (`****`) and quote (`____`) blocks are deliberately
+ * absent: they hold prose, so a `//` line inside one really is a comment and
+ * Asciidoctor really does strip it.
+ */
+function verbatimDelimiter(trimmed: string): string | undefined {
+  if (/^(-{4,}|\.{4,}|\+{4,})$/.test(trimmed)) return trimmed[0];
+  if (/^`{3,}$/.test(trimmed)) return "`";
+  return undefined;
+}
+
+/** True when this line opens or closes a verbatim block. */
+export function isVerbatimDelimiter(line: string): boolean {
+  return verbatimDelimiter(line.trim()) !== undefined;
+}
+
+/**
+ * Per-line flags marking every line of every verbatim block, delimiters
+ * included.
+ *
+ * Inside one of these a `//` line is *code*, which Asciidoctor renders as
+ * written. That makes verbatim blocks the one place a marker comment must never
+ * be written — it would appear in the delivered PDF — and the one place a
+ * marker-shaped line must never be believed: a Go or JavaScript sample may
+ * legitimately contain `// eddie:deadbeef`, and reading it as an anchor
+ * fabricates a binding to code the editor never marked.
+ *
+ * Pairing is by delimiter character rather than exact length, which is what real
+ * manuscripts do; nesting the same character is rare enough that closing on the
+ * first match is the more predictable answer.
+ */
+export function verbatimLineFlags(rawLines: string[]): boolean[] {
+  const flags: boolean[] = new Array(rawLines.length).fill(false);
+  let open: string | undefined;
+  for (let i = 0; i < rawLines.length; i++) {
+    const delim = verbatimDelimiter(rawLines[i].trim());
+    if (open !== undefined) {
+      flags[i] = true; // the closing delimiter belongs to the block it closes
+      if (delim === open) open = undefined;
+      continue;
+    }
+    if (delim !== undefined) {
+      open = delim;
+      flags[i] = true;
+    }
+  }
+  return flags;
+}
+
+/**
  * Per-line comment flags for a whole document: `//` line comments, `////`
  * block-comment delimiters, and every line inside a `////` block. Comment text
  * never reaches the rendered PDF, so flagged lines must never be match
