@@ -12,6 +12,7 @@
  * character range. The struck/inserted text is normalized the same way and
  * located inside the raw span.
  */
+import type { QuoteSelector } from "../model/types.js";
 
 export interface NormMap {
   /** Normalized text: lowercased alnum + single-space separators, trimmed. */
@@ -111,6 +112,56 @@ export function locate(
     };
   }
   return null;
+}
+
+/** Where a selector resolved, and on what strength. */
+export interface QuoteHit extends RawRange {
+  /** `quote` when the surrounding context matched too, `exact` when only the span did. */
+  method: "quote" | "exact";
+}
+
+/**
+ * Find a selector's span inside `rawHaystack`.
+ *
+ * Context is tried first and as one piece, because it is what distinguishes the
+ * third "the second is trust" in a chapter from the first two: `exact` alone is
+ * ambiguous exactly where a manuscript repeats itself, which is often. Only when
+ * the surrounding prose has itself been rewritten does the bare span decide it,
+ * and the caller can see which of the two happened.
+ *
+ * Intended to run against ONE block, not a whole document. Narrowing first is
+ * what makes this reliable: within a paragraph the candidates are few and the
+ * fuzzy fallback has little room to be creative.
+ */
+export function locateQuote(
+  selector: QuoteSelector,
+  rawHaystack: string,
+  minScore = 0.8
+): QuoteHit | null {
+  const exact = selector.exact ?? "";
+  if (!exact.trim()) return null;
+
+  const prefix = selector.prefix ?? "";
+  const suffix = selector.suffix ?? "";
+  if (prefix || suffix) {
+    const window = locate(prefix + exact + suffix, rawHaystack, minScore);
+    if (window) {
+      // Re-find the span inside the window that context just pinned down. The
+      // window is a raw slice, so the offset is relative to its start.
+      const inner = locate(exact, rawHaystack.slice(window.start, window.end), minScore);
+      if (inner) {
+        return {
+          start: window.start + inner.start,
+          end: window.start + inner.end,
+          score: Math.min(window.score, inner.score),
+          method: "quote",
+        };
+      }
+    }
+  }
+
+  const bare = locate(exact, rawHaystack, minScore);
+  return bare ? { ...bare, method: "exact" } : null;
 }
 
 /** Fraction of positions that match between two equal-length-ish strings. */

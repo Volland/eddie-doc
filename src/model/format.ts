@@ -27,6 +27,7 @@ import type {
   MatchMethod,
   PdfInfo,
   PdfRole,
+  QuoteSelector,
   Reply,
   ReviewItem,
   ReviewSession,
@@ -297,6 +298,20 @@ function cleanUndefined<T extends object>(obj: T): T {
   return obj;
 }
 
+/**
+ * A selector with its empty fields dropped, or undefined when it has no span to
+ * look for. `exact` is the whole point of the block: without it there is nothing
+ * to find, and prefix/suffix alone would resolve to the text *beside* the mark.
+ */
+function cleanSelector(s: QuoteSelector | undefined): QuoteSelector | undefined {
+  if (!s?.exact?.trim()) return undefined;
+  return cleanUndefined({
+    exact: s.exact,
+    prefix: s.prefix || undefined,
+    suffix: s.suffix || undefined,
+  });
+}
+
 /** An anchor with its empty fields dropped, or undefined when nothing is set. */
 function cleanAnchor(a: SourceAnchor | undefined): SourceAnchor | undefined {
   if (!a) return undefined;
@@ -306,6 +321,7 @@ function cleanAnchor(a: SourceAnchor | undefined): SourceAnchor | undefined {
     blockFingerprint: a.blockFingerprint || undefined,
     contextBefore: a.contextBefore || undefined,
     contextAfter: a.contextAfter || undefined,
+    selector: cleanSelector(a.selector),
   });
   return Object.keys(out).length ? out : undefined;
 }

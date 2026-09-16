@@ -109,6 +109,24 @@ export interface Reply {
  * resolve them instead of searching. Populated by the anchor command; every
  * field is optional because an un-anchored session has none of them.
  */
+/**
+ * A span identified by what it says and what surrounds it — the W3C
+ * `TextQuoteSelector` (`docs/FORMAT.md` names that alignment).
+ *
+ * A marker says which paragraph; this says which words inside it. Storing the
+ * words rather than an offset is what makes it durable: an offset is invalid
+ * after the first edit on the line, while the words survive everything except
+ * rewriting the words.
+ */
+export interface QuoteSelector {
+  /** The text the mark is actually about. */
+  exact: string;
+  /** A short run of text immediately before it, to settle repeated wording. */
+  prefix?: string;
+  /** A short run of text immediately after it. */
+  suffix?: string;
+}
+
 export interface SourceAnchor {
   /** Id of the `// eddie:<id>` marker comment injected into the source. */
   marker?: string;
@@ -120,6 +138,15 @@ export interface SourceAnchor {
   contextBefore?: string;
   /** A few normalized words after the anchored block. */
   contextAfter?: string;
+  /**
+   * The span within the block the mark is actually about.
+   *
+   * The tiers above find the paragraph; this finds the sentence inside it. The
+   * split matters: matching a phrase against a whole chapter is the search that
+   * produces confident wrong answers, while matching it against one paragraph
+   * that is already known to be the right one is a small, bounded problem.
+   */
+  selector?: QuoteSelector;
 }
 
 /** A fully-resolved review item: annotation + where it lives in source + state. */

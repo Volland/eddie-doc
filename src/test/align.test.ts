@@ -1,5 +1,5 @@
 import * as assert from "node:assert";
-import { normalizeWithMap, locate } from "../matching/align.js";
+import { normalizeWithMap, locate, locateQuote } from "../matching/align.js";
 
 describe("normalizeWithMap", () => {
   it("maps each normalized char back to its raw offset", () => {
@@ -66,5 +66,72 @@ describe("locate", () => {
   it("returns null when nothing matches", () => {
     assert.strictEqual(locate("xyzzy plugh", "the quick brown fox"), null);
     assert.strictEqual(locate("", "the quick brown fox"), null);
+  });
+});
+
+describe("locateQuote", () => {
+  /** A paragraph that says the same thing twice — which manuscripts do. */
+  const BLOCK =
+    "The first debt is trust. Chapter 2 promised a memory system and " +
+    "deferred the question. The second debt is trust, and it is the harder one.";
+
+  const at = (hit: { start: number; end: number } | null) =>
+    hit ? BLOCK.slice(hit.start, hit.end) : null;
+
+  it("picks the occurrence its context points at, not the first", () => {
+    const second = locateQuote(
+      { exact: "is trust", prefix: "The second debt ", suffix: ", and it is the harder" },
+      BLOCK
+    );
+    assert.strictEqual(at(second), "is trust");
+    assert.strictEqual(second!.method, "quote");
+    // Proof it is the SECOND one: the first lies in the opening sentence.
+    assert.ok(second!.start > BLOCK.indexOf("Chapter 2"));
+  });
+
+  it("distinguishes the two occurrences by context alone", () => {
+    const first = locateQuote({ exact: "is trust", prefix: "The first debt " }, BLOCK);
+    const second = locateQuote({ exact: "is trust", prefix: "The second debt " }, BLOCK);
+    assert.notStrictEqual(first!.start, second!.start);
+    assert.ok(first!.start < second!.start);
+  });
+
+  it("falls back to the span when the context around it was rewritten", () => {
+    const hit = locateQuote(
+      {
+        exact: "deferred the question",
+        prefix: "and completely different words that are no longer present ",
+        suffix: " nor are these",
+      },
+      BLOCK
+    );
+    assert.strictEqual(at(hit), "deferred the question");
+    // Says so, rather than claiming the context still matched.
+    assert.strictEqual(hit!.method, "exact");
+  });
+
+  it("reads through AsciiDoc markup in the source", () => {
+    const marked = "The second debt is *trust*, and it is the harder one.";
+    const hit = locateQuote({ exact: "is trust", prefix: "The second debt " }, marked);
+    assert.ok(hit);
+    assert.ok(marked.slice(hit!.start, hit!.end).includes("trust"));
+  });
+
+  it("gives up when the words themselves are gone", () => {
+    assert.strictEqual(
+      locateQuote({ exact: "a sentence that was deleted outright", prefix: "The first debt " }, BLOCK),
+      null
+    );
+  });
+
+  it("needs an exact span to look for", () => {
+    assert.strictEqual(locateQuote({ exact: "", prefix: "The first" }, BLOCK), null);
+    assert.strictEqual(locateQuote({ exact: "   " }, BLOCK), null);
+  });
+
+  it("works with no context at all", () => {
+    const hit = locateQuote({ exact: "Chapter 2 promised" }, BLOCK);
+    assert.strictEqual(at(hit), "Chapter 2 promised");
+    assert.strictEqual(hit!.method, "exact");
   });
 });
