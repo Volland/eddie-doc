@@ -7,7 +7,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { effectiveLine, isConfident } from "../matching/mapper.js";
-import { commentRef, withoutRef } from "./refs.js";
+import { itemRef, withoutRef } from "./refs.js";
 import { sha256 } from "./format.js";
 import { KIND_LABEL, type ReviewItem, type ReviewSession } from "./types.js";
 
@@ -51,8 +51,8 @@ function locationLabel(item: ReviewItem): string {
 function renderItem(item: ReviewItem): string {
   const head = [
     // Leads the line, so the editor can find their own numbered query at a glance.
-    commentRef(item.comment)
-      ? `**${commentRef(item.comment)}** ${KIND_LABEL[item.kind]}`
+    itemRef(item)
+      ? `**${itemRef(item)}** ${KIND_LABEL[item.kind]}`
       : `**${KIND_LABEL[item.kind]}**`,
     `p${item.page}`,
     locationLabel(item),
@@ -94,13 +94,22 @@ export function renderReport(
   const resolved = items.filter((i) => i.resolved);
 
   const sourceName = path.basename(session.adocPath);
-  const pdfName = session.pdfPath ? path.basename(session.pdfPath) : "(unknown)";
+  // A mapping that grew from several PDFs names them all, with whose marks each
+  // added one holds when that was recorded.
+  const pdfNames: string[] = session.pdfPath
+    ? [`\`${path.basename(session.pdfPath)}\``]
+    : [];
+  for (const p of session.extraPdfs ?? []) {
+    const who = p.reviewer || p.origin;
+    pdfNames.push(`\`${path.basename(p.path)}\`${who ? ` (${who})` : ""}`);
+  }
+  const pdfLine = pdfNames.length ? pdfNames.join(", ") : "`(unknown)`";
 
   const out: string[] = [
     `# Review report — ${sourceName}`,
     "",
     `- **Source:** \`${sourceName}\``,
-    `- **Annotated PDF:** \`${pdfName}\``,
+    `- **Annotated PDF${pdfNames.length > 1 ? "s" : ""}:** ${pdfLine}`,
     `- **Generated:** ${opts.generatedAt ?? session.updatedAt}`,
     `- **Progress:** ${resolved.length} of ${items.length} resolved · ` +
       `${open.length} open · ${review.length} need review · ` +
@@ -142,6 +151,7 @@ export function isSessionStale(session: ReviewSession): boolean {
   };
   return (
     differs(session.adocPath, integ.sourceSha256) ||
-    differs(session.pdfPath, integ.pdfSha256)
+    differs(session.pdfPath, integ.pdfSha256) ||
+    (session.extraPdfs ?? []).some((p) => differs(p.path, p.sha256))
   );
 }

@@ -87,12 +87,49 @@
         }
       }
     },
+    "pdfs": {
+      "type": "array",
+      "description": "PDFs whose marks were added to this mapping after its own — another editor's copy, or the same editor's copy sent again — oldest first. Items from one name its id in annotation.pdf.",
+      "items": { "$ref": "#/$defs/addedPdf" }
+    },
     "items": {
       "type": "array",
       "items": { "$ref": "#/$defs/item" }
     }
   },
   "$defs": {
+    "addedPdf": {
+      "allOf": [{ "$ref": "#/$defs/fileRef" }],
+      "type": "object",
+      "required": ["id", "path"],
+      "description": "A PDF added to the mapping after its own, addressed relative to this sidecar.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique within the mapping: pdf-2, pdf-3… The mapping's own PDF is implicitly the first."
+        },
+        "path": true,
+        "sha256": true,
+        "bytes": true,
+        "annotationCount": { "type": "integer", "minimum": 0 },
+        "role": { "$ref": "#/$defs/pdfRole" },
+        "imported": { "type": "boolean" },
+        "importedFrom": { "type": "string" },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the PDF's marks were added."
+        },
+        "origin": {
+          "type": "string",
+          "description": "Where these marks came from, when it differs from the mapping's."
+        },
+        "reviewer": {
+          "type": "string",
+          "description": "Who made these marks, when the PDF does not name them."
+        }
+      }
+    },
     "revision": {
       "type": "object",
       "description": "One round of editing. Every mapping that came back from the same pass over the manuscript shares a revision, however many editors contributed to it.",
@@ -274,6 +311,10 @@
           "type": "string",
           "description": "For caret/insert marks: text left of the caret on the same line."
         },
+        "pdf": {
+          "type": "string",
+          "description": "Id of the added PDF (pdfs[].id) this mark came from. Absent for marks from the mapping's own PDF."
+        },
         "geometry": { "$ref": "#/$defs/geometry" }
       }
     },
@@ -401,6 +442,15 @@
         "id": {
           "type": "string",
           "description": "Stable id — the PDF annotation id when available, else page+geometry."
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The remark's number within the mapping, as it is quoted (3 in #3 VP). Assigned once and never changed; unique within the mapping."
+        },
+        "initials": {
+          "type": "string",
+          "description": "Initials of whoever made the mark (VP in #3 VP): from the PDF's author, else the added PDF's or the mapping's reviewer or origin."
         },
         "annotation": { "$ref": "#/$defs/annotation" },
         "anchor": { "$ref": "#/$defs/anchor" },

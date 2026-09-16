@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ReviewItem, ReviewSession } from "../model/types.js";
 import {
@@ -9,7 +10,7 @@ import {
   revisionLabel,
 } from "../model/types.js";
 import { effectiveLine, isConfident } from "../matching/mapper.js";
-import { commentRef, refPrefix, withoutRef } from "../model/refs.js";
+import { itemRef, refPrefix, withoutRef } from "../model/refs.js";
 import type { ReviewStore } from "../model/store.js";
 
 type Node = GroupNode | ItemNode | MappingNode;
@@ -218,6 +219,12 @@ function mappingTooltip(session: ReviewSession): vscode.MarkdownString {
     `- PDF: ${PDF_ROLE_LABEL[session.pdf?.role ?? "annotated"]}` +
       (session.pdf?.imported ? " (imported)" : "")
   );
+  for (const p of session.extraPdfs ?? []) {
+    const who = p.reviewer || p.origin;
+    rows.push(
+      `- Added PDF: \`${path.basename(p.path)}\`${who ? ` — ${who}` : ""}`
+    );
+  }
   if (session.revision.receivedAt)
     rows.push(`- Received: ${session.revision.receivedAt.slice(0, 10)}`);
   if (session.revision.note) rows.push(`- Note: ${session.revision.note}`);
@@ -252,7 +259,7 @@ function snippet(item: ReviewItem): string {
 
 function tooltip(item: ReviewItem): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
-  const ref = commentRef(item.comment);
+  const ref = itemRef(item);
   md.appendMarkdown(
     `${ref ? `**${ref}** · ` : ""}**${KIND_LABEL[item.kind]}** · page ${item.page}`
   );

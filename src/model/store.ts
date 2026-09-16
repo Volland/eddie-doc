@@ -2,18 +2,29 @@ import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import type {
-  Artifact,
-  MappingInfo,
-  PdfInfo,
-  PdfRole,
-  RawAnnotation,
-  Reply,
-  ReviewItem,
-  ReviewSession,
-  RevisionInfo,
-  SessionIntegrity,
+import {
+  mappingLabel,
+  markSourceName,
+  type Artifact,
+  type MappingInfo,
+  type PdfInfo,
+  type PdfRole,
+  type PdfSource,
+  type RawAnnotation,
+  type Reply,
+  type ReviewItem,
+  type ReviewSession,
+  type RevisionInfo,
+  type SessionIntegrity,
 } from "./types.js";
+import {
+  appendItems,
+  mergeInto,
+  nextPdfId,
+  sameRemarkKey,
+  type MergeOutcome,
+} from "./combine.js";
+import { assignNumbers } from "./numbering.js";
 import { parse, resolveSourcePath, serialize, sha256 } from "./format.js";
 import {
   documentFolder,
@@ -27,6 +38,7 @@ import {
 } from "./layout.js";
 import { extractAnnotations } from "../pdf/extract.js";
 import {
+  bySourcePosition,
   effectiveLine,
   mapAnnotations,
   matchOne,
@@ -103,6 +115,31 @@ export interface LoadReviewOptions {
   pdfRole?: PdfRole;
   /** Copy the PDF into the revision's `pdf/` folder and map the copy. */
   importPdf?: boolean;
+}
+
+/** Adding one more PDF's marks to an existing mapping. */
+export interface AppendPdfOptions {
+  threshold: number;
+  /** Where these marks came from, when it is not the mapping's own origin. */
+  origin?: string;
+  /** Who made these marks, when the PDF does not name them. */
+  reviewer?: string;
+  /** What kind of PDF is being added. Defaults to `annotated`. */
+  pdfRole?: PdfRole;
+  /** Copy the PDF into the revision's `pdf/` folder and read the copy. */
+  importPdf?: boolean;
+}
+
+/** What {@link ReviewStore.appendPdf} did. */
+export interface AppendPdfResult {
+  /** Marks new to the mapping. */
+  added: ReviewItem[];
+  /** Marks skipped because the mapping already had them. */
+  duplicates: number;
+  /** The PDF's record in the mapping; undefined when it was already there. */
+  source?: PdfSource;
+  /** The byte-identical PDF is already part of the mapping; nothing was read. */
+  alreadyPresent?: boolean;
 }
 
 /** What a legacy-sidecar migration would do, per file. */
@@ -292,6 +329,9 @@ export class ReviewStore {
       const session = parse(text, sidecarPath, bound);
       if (!session) return undefined;
       session.sidecarPath = path.resolve(sidecarPath);
+      // A sidecar from before numbering is numbered on sight, in reading
+      // order, so the same file shows the same numbers until it is next saved.
+      this.number(session);
       this.sessions.set(session.sidecarPath, session);
       return session;
     } catch {
@@ -350,17 +390,54 @@ export class ReviewStore {
     // bug unrepresentable regardless of what the extractor does with the array.
     const pdfSha256 = sha256(bytes);
     const annots = await extractAnnotations(bytes);
-    const prev =
-      existing?.items ??
-      this.carrySource(adocPath, revision, opts.mapping?.origin)?.items;
+    // Re-binding replaces the mapping's own PDF only. Marks from PDFs added to
+    // it later are kept, and must not lend their state to look-alike marks in
+    // the new file — so they are left out of the carry and re-mapped apart.
+    const prev = existing
+      ? existing.items.filter((i) => !i.pdfId)
+      : this.carrySource(adocPath, revision, opts.mapping?.origin)?.items;
     const stats: MapStats = { carried: 0 };
-    const items = mapAnnotations(
+    let items = mapAnnotations(
       annots,
       source,
       { threshold: opts.threshold },
       prev,
       stats
     );
+    if (!existing) {
+      // A new round is a new list: its numbers start again at 1, rather than
+      // inheriting the previous round's by content.
+      for (const it of items) it.number = it.initials = undefined;
+    } else {
+      // Ids re-key when a PDF is re-exported, and the mapper only rescues items
+      // the author touched. The rest are still the same remarks, and keep
+      // their numbers by content.
+      const byKey = new Map<string, ReviewItem[]>();
+      const taken = new Set(items.map((i) => i.number).filter((n) => n != null));
+      for (const p of prev ?? []) {
+        if (p.number == null || taken.has(p.number)) continue;
+        const k = sameRemarkKey(p);
+        byKey.set(k, [...(byKey.get(k) ?? []), p]);
+      }
+      for (const it of items) {
+        if (it.number != null) continue;
+        const twin = byKey.get(sameRemarkKey(it))?.shift();
+        if (twin) {
+          it.number = twin.number;
+          it.initials = twin.initials;
+        }
+      }
+      const added = existing.items.filter((i) => i.pdfId);
+      if (added.length) {
+        const kept = mapAnnotations(
+          added.map(toRaw),
+          source,
+          { threshold: opts.threshold },
+          added
+        );
+        items = [...items, ...kept].sort(bySourcePosition);
+      }
+    }
     await this.runFallbacks(items, source);
     // Carrying state into a new round can surface marks whose paragraph is gone.
     this.warnNewlyStale(stats.stale ?? 0);
@@ -400,6 +477,7 @@ export class ReviewStore {
         pdfAnnotationCount: annots.length,
       },
       artifacts: existing?.artifacts,
+      extraPdfs: existing?.extraPdfs,
       items,
     };
     this.sessions.set(session.sidecarPath, session);
@@ -489,6 +567,123 @@ export class ReviewStore {
       );
       return undefined;
     }
+  }
+
+  /**
+   * Add another PDF's marks to an existing mapping.
+   *
+   * This is how a review is *continued*: the editor sends the chapter again
+   * with more marks, or a second editor's copy of the same pass arrives. The
+   * new marks join the mapping the author is already working through, take the
+   * next numbers, and everything already there — numbers, resolutions, replies
+   * — stays exactly as it was. Marks the mapping already holds are skipped, so
+   * a re-sent copy only contributes what is new on it.
+   */
+  async appendPdf(
+    sidecarPath: string,
+    pdfPath: string,
+    opts: AppendPdfOptions
+  ): Promise<AppendPdfResult> {
+    const session = this.getBySidecar(sidecarPath);
+    if (!session) throw new Error("that mapping is not loaded");
+
+    const original = new Uint8Array(fs.readFileSync(pdfPath));
+    const sha = sha256(original);
+    const known = [
+      session.integrity?.pdfSha256,
+      ...(session.extraPdfs ?? []).map((p) => p.sha256),
+    ];
+    if (known.includes(sha)) {
+      return { added: [], duplicates: 0, alreadyPresent: true };
+    }
+
+    const pdfId = nextPdfId(session);
+    const source: PdfSource = {
+      id: pdfId,
+      path: pdfPath,
+      role: opts.pdfRole ?? "annotated",
+      sha256: sha,
+      addedAt: new Date().toISOString(),
+      origin: opts.origin || undefined,
+      reviewer: opts.reviewer || undefined,
+    };
+    if (opts.importPdf) {
+      const copied = this.importPdf(
+        session.adocPath,
+        session.revision,
+        `${session.mapping.id}-${pdfId}`,
+        pdfPath
+      );
+      if (copied) {
+        source.path = copied;
+        source.imported = true;
+        source.importedFrom = pdfPath;
+      }
+    }
+
+    const sourceText = fs.readFileSync(session.adocPath, "utf8");
+    const annots = await extractAnnotations(original);
+    source.annotationCount = annots.length;
+    // Tag each mark with its PDF before mapping, so the fallbacks and the
+    // duplicate check see the item exactly as it will be stored.
+    const fresh = mapAnnotations(annots, sourceText, {
+      threshold: opts.threshold,
+    }).map((it) => ({ ...it, pdfId }));
+    await this.runFallbacks(fresh, sourceText);
+
+    const outcome = appendItems(session, source, fresh, (it) =>
+      markSourceName(session, it)
+    );
+    session.updatedAt = new Date().toISOString();
+    this.persist(session);
+    this._onDidChange.fire(session.adocPath);
+    return { ...outcome, source };
+  }
+
+  /**
+   * Fold other mappings of the same document into `targetSidecar`, then delete
+   * their sidecars. Their PDFs, items and review state all move to the target —
+   * see {@link mergeInto} for what happens to numbers and repeated marks.
+   *
+   * The target is written before anything is deleted, so a failure part-way
+   * leaves at worst a remark in two mappings, never a remark in none.
+   */
+  mergeMappings(
+    targetSidecar: string,
+    otherSidecars: string[]
+  ): MergeOutcome & { removed: string[]; failed: string[] } {
+    const target = this.getBySidecar(targetSidecar);
+    if (!target) throw new Error("the mapping to merge into is not loaded");
+    const others = otherSidecars
+      .map((p) => this.getBySidecar(p))
+      .filter((s): s is ReviewSession => !!s && s !== target);
+    for (const o of others) {
+      if (!samePath(o.adocPath, target.adocPath)) {
+        throw new Error(
+          `${mappingLabel(o)} reviews a different document; only mappings ` +
+            `of the same source can be merged`
+        );
+      }
+    }
+
+    const outcome = mergeInto(target, others);
+    target.updatedAt = new Date().toISOString();
+    this.persist(target);
+
+    const removed: string[] = [];
+    const failed: string[] = [];
+    for (const o of others) {
+      try {
+        if (fs.existsSync(o.sidecarPath)) fs.unlinkSync(o.sidecarPath);
+        this.sessions.delete(o.sidecarPath);
+        removed.push(o.sidecarPath);
+      } catch (e) {
+        failed.push(`${path.basename(o.sidecarPath)}: ${String(e)}`);
+      }
+    }
+    this.activeByDoc.set(path.resolve(target.adocPath), target.sidecarPath);
+    this._onDidChange.fire(target.adocPath);
+    return { ...outcome, removed, failed };
   }
 
   /**
@@ -941,7 +1136,15 @@ export class ReviewStore {
     this._onDidChange.fire(adocPath);
   }
 
+  /** Number whatever is unnumbered and fill in missing initials. */
+  private number(session: ReviewSession): boolean {
+    return assignNumbers(session.items, (it) => markSourceName(session, it));
+  }
+
   private persist(session: ReviewSession): void {
+    // Every written sidecar is fully numbered — including one whose reviewer
+    // was only just named, which is when unattributed marks get initials.
+    this.number(session);
     try {
       // Any write upgrades the sidecar to the current on-disk standard.
       session.version = 3;

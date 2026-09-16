@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { ReviewStore } from "../model/store.js";
 import { serialize } from "../model/format.js";
-import type { ReviewSession } from "../model/types.js";
+import type { ReviewItem, ReviewSession } from "../model/types.js";
 
 /**
  * A project on disk: a manuscript folder with real .adoc files, and a review
@@ -30,6 +30,7 @@ function seed(
     origin?: string;
     updatedAt?: string;
     sidecarPath?: string;
+    items?: ReviewItem[];
   }
 ): ReviewSession {
   const revision = { id: `rev-${opts.ordinal}`, ordinal: opts.ordinal };
@@ -49,7 +50,7 @@ function seed(
     pdf: { role: "annotated" },
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: opts.updatedAt ?? "2026-08-01T00:00:00.000Z",
-    items: [],
+    items: opts.items ?? [],
   };
   fs.mkdirSync(path.dirname(sidecarPath), { recursive: true });
   fs.writeFileSync(sidecarPath, serialize(session, sidecarPath), "utf8");
@@ -288,5 +289,116 @@ describe("review store — rounds and mappings", () => {
     const file = adoc("manuscript/chapter-01.adoc");
     seed(file, { ordinal: 1, mappingId: "acme" });
     assert.strictEqual(store.planMigration().length, 0);
+  });
+});
+
+/** A mark as extraction would produce it, placed on line 2 of the seeded prose. */
+function mark(id: string, over: Partial<ReviewItem> = {}): ReviewItem {
+  return {
+    id,
+    kind: "comment",
+    page: 1,
+    comment: `Remark ${id}`,
+    anchoredText: "Some prose to match against.",
+    rect: [72, 700, 300, 712],
+    match: { startLine: 2, endLine: 2, score: 0.9, sourceExcerpt: "" },
+    resolved: false,
+    ...over,
+  };
+}
+
+describe("review store — numbering and merging mappings", () => {
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "eddie-store-"));
+    store = new ReviewStore();
+    store.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
+  });
+
+  afterEach(() => {
+    store.dispose();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("numbers a sidecar written before numbering, and keeps those numbers on write", () => {
+    const file = adoc("manuscript/chapter-01.adoc");
+    const s = seed(file, {
+      ordinal: 1,
+      mappingId: "acme",
+      origin: "Acme Editorial",
+      items: [
+        mark("second", { page: 2 }),
+        mark("first", { page: 1, author: "Rachel Green" }),
+      ],
+    });
+    const byId = new Map(s.items.map((i) => [i.id, i]));
+    assert.deepStrictEqual(
+      [byId.get("first")!.number, byId.get("first")!.initials],
+      [1, "RG"]
+    );
+    assert.deepStrictEqual(
+      [byId.get("second")!.number, byId.get("second")!.initials],
+      [2, "AE"],
+      "a mark the PDF does not attribute takes the mapping's origin"
+    );
+
+    store.toggleResolved(file, "second");
+    const onDisk = JSON.parse(fs.readFileSync(s.sidecarPath, "utf8"));
+    const second = onDisk.items.find((i: { id: string }) => i.id === "second");
+    assert.deepStrictEqual([second.number, second.initials], [2, "AE"]);
+  });
+
+  it("merges other editors' mappings into one and removes their files", () => {
+    const file = adoc("manuscript/chapter-01.adoc");
+    const acme = seed(file, {
+      ordinal: 1,
+      mappingId: "acme",
+      origin: "Acme",
+      items: [mark("a", { author: "Rachel Green" })],
+    });
+    const beta = seed(file, {
+      ordinal: 1,
+      mappingId: "beta",
+      origin: "Beta",
+      items: [
+        mark("a", { author: "Mo Rahimi", comment: "Mo's take" }),
+        mark("b", { author: "Mo Rahimi", page: 2, resolved: true }),
+      ],
+    });
+    const other = adoc("manuscript/chapter-02.adoc");
+    const elsewhere = seed(other, { ordinal: 1, mappingId: "gamma" });
+
+    assert.throws(
+      () => store.mergeMappings(acme.sidecarPath, [elsewhere.sidecarPath]),
+      /different document/
+    );
+
+    const res = store.mergeMappings(acme.sidecarPath, [beta.sidecarPath]);
+    assert.deepStrictEqual([res.moved, res.folded, res.failed], [2, 0, []]);
+    assert.deepStrictEqual(res.removed, [beta.sidecarPath]);
+    assert.strictEqual(fs.existsSync(beta.sidecarPath), false);
+    assert.strictEqual(store.getBySidecar(beta.sidecarPath), undefined);
+    assert.deepStrictEqual(
+      store.sessionsFor(file).map((s) => s.mapping.id),
+      ["acme"]
+    );
+    assert.strictEqual(store.get(file)?.sidecarPath, acme.sidecarPath);
+
+    // What is on disk is what a fresh load sees.
+    const fresh = new ReviewStore();
+    fresh.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
+    const reloaded = fresh.loadSidecarFile(acme.sidecarPath, file)!;
+    fresh.dispose();
+    const rows = reloaded.items
+      .map((i) => [i.id, i.number, i.initials, i.pdfId, i.resolved])
+      .sort((x, y) => (x[1] as number) - (y[1] as number));
+    assert.deepStrictEqual(rows, [
+      ["a", 1, "RG", undefined, false],
+      ["pdf-2/a", 2, "MR", "pdf-2", false],
+      ["pdf-2/b", 3, "MR", "pdf-2", true],
+    ]);
+    assert.deepStrictEqual(
+      reloaded.extraPdfs?.map((p) => [p.id, path.basename(p.path), p.origin]),
+      [["pdf-2", "beta.pdf", "Beta"]]
+    );
   });
 });

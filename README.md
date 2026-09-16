@@ -76,7 +76,9 @@ which can come back as more than one annotated PDF from more than one place. See
 | --- | --- |
 | `Eddie Doc: Open PDF Review for AsciiDoc` | Pick an annotated PDF and map it. Once the document has history, it asks which round the marks belong to |
 | `Eddie Doc: Start New Review Round…` | Map a PDF as the next round (rev-N+1), carrying state forward |
-| `Eddie Doc: Add Annotated PDF to Current Round…` | A second (third…) editor's PDF for the round already in progress |
+| `Eddie Doc: Add Annotated PDF to Current Round…` | A second (third…) editor's PDF for the round already in progress, as its own mapping |
+| `Eddie Doc: Add PDFs to This Mapping…` | Continue a mapping: append the marks from one or more further PDFs to its list. Marks it already has are skipped |
+| `Eddie Doc: Merge Mappings into This One…` | Fold other mappings of the document into this one, keeping their resolved state, notes and replies |
 | `Eddie Doc: Switch Round / Mapping` | Show a different round or a different editor's marks |
 | `Eddie Doc: Edit Round Details…` | Set the round label, date, origin, reviewer, kind of review and kind of PDF |
 | `Eddie Doc: Remove This Mapping…` | Delete one mapping's sidecar; the manuscript and PDF are untouched |
@@ -149,7 +151,43 @@ what lands where.
    *Switch Round / Mapping*.
 
 *Open PDF Review* on a document that already has history asks which round the
-PDF belongs to, so you can also use it for all three cases.
+PDF belongs to — or which mapping to add it to — so you can also use it for
+every case here.
+
+### Continuing and merging
+
+Separate mappings keep editors apart; sometimes you would rather work through
+everything as **one numbered list**.
+
+- **Add PDFs to This Mapping** appends further PDFs' marks to an existing
+  mapping. Use it when the editor sends the chapter again with more marks on it
+  — only the marks that are new get added — or when a second editor marked up
+  their own copy of the same pass. You're asked whose marks each file holds, so
+  marks from a PDF that names nobody still get initials. You can pick several
+  PDFs at once.
+- **Merge Mappings into This One** folds other mappings of the same document
+  into the one you choose. Every mark moves across with what you did to it —
+  resolved, notes, replies, hand-made links and anchors. A remark both mappings
+  hold is kept once, with both copies' state combined. The merged mappings'
+  sidecars are then deleted; their PDFs and reports are left alone.
+
+Either way, **Preview in PDF** opens the PDF each mark actually came from.
+
+### Numbered remarks
+
+Every mark is numbered and labelled with the initials of whoever made it:
+`#3 VP`, `#12 MR [C7]` (the editor's own query number, when they wrote one,
+stays beside it). The label leads the sidebar, the hover, the comment thread,
+the Problems panel and the report, and is written into stamped PDFs so the
+editor can quote it back.
+
+Numbers are assigned once and **never move**. Re-mapping, editing and adding
+PDFs leave them where they are; new marks continue after the highest number,
+and merged mappings are numbered after the target's own. A new round starts
+again at `#1`. Initials come from the PDF's author field. When that is empty or a
+placeholder such as `Editor`, they come from the reviewer or origin recorded for
+the PDF or mapping instead, and fill in as soon as you set one in *Edit Round
+Details*.
 
 ### Metadata each mapping keeps
 

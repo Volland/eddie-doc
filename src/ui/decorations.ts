@@ -4,7 +4,7 @@ import { KIND_LABEL } from "../model/types.js";
 import { effectiveLine } from "../matching/mapper.js";
 import type { ReviewStore } from "../model/store.js";
 import { isAdocDoc } from "../util.js";
-import { commentRef, refPrefix, withoutRef } from "../model/refs.js";
+import { itemRef, refPrefix, withoutRef } from "../model/refs.js";
 
 const UNMATCHED = Number.MAX_SAFE_INTEGER;
 
@@ -101,7 +101,7 @@ function summarize(items: ReviewItem[]): string {
   }
   // Several marks on one line: lead with their numbers, which is how the author
   // will look them up — "3 annotations" says nothing addressable.
-  const refs = items.map((i) => commentRef(i.comment)).filter(Boolean);
+  const refs = items.map((i) => itemRef(i)).filter(Boolean);
   return refs.length
     ? `${refs.join(" ")} — ${items.length} annotations`
     : `${items.length} annotations`;
@@ -112,7 +112,7 @@ function buildHover(items: ReviewItem[]): vscode.MarkdownString {
   md.isTrusted = true;
   for (const it of items) {
     md.appendMarkdown(
-      `${commentRef(it.comment) ? `**${commentRef(it.comment)}** · ` : ""}` +
+      `${itemRef(it) ? `**${itemRef(it)}** · ` : ""}` +
         `**${KIND_LABEL[it.kind]}**${it.author ? ` · _${it.author}_` : ""}${
         it.resolved ? " · ✅ resolved" : ""
       }${it.stale ? " · ⚠️ stale" : ""} · p${it.page}\n\n`

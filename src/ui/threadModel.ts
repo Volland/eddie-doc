@@ -9,7 +9,7 @@
  * `vscode`, so it is directly testable.
  */
 import { KIND_LABEL, type ReviewItem } from "../model/types.js";
-import { commentRef, withoutRef } from "../model/refs.js";
+import { itemRef, withoutRef } from "../model/refs.js";
 
 /**
  * Header line for the thread: the editor's query number, kind, page, and how
@@ -18,7 +18,7 @@ import { commentRef, withoutRef } from "../model/refs.js";
  * collapsed thread.
  */
 export function threadLabel(item: ReviewItem): string {
-  const ref = commentRef(item.comment);
+  const ref = itemRef(item);
   const bits = [...(ref ? [ref] : []), KIND_LABEL[item.kind], `p${item.page}`];
   const m = item.match?.method;
   if (item.manualLine != null) bits.push("manual");
@@ -36,7 +36,7 @@ export function rootMarkdown(item: ReviewItem): string {
     .replace(/\s+/g, " ")
     .trim();
   const quote = marked ? `> ${marked.slice(0, 400)}\n\n` : "";
-  const ref = commentRef(item.comment);
+  const ref = itemRef(item);
   const note = withoutRef(item.comment) || `_${KIND_LABEL[item.kind]} with no note._`;
   return quote + (ref ? `**${ref}** ${note}` : note);
 }

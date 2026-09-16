@@ -176,6 +176,42 @@ export interface ReviewItem extends RawAnnotation {
   replies?: Reply[];
   /** Durable source binding that survives edits made outside the extension. */
   anchor?: SourceAnchor;
+  /**
+   * This remark's number within its mapping, `3` in `#3 VP`. Assigned once and
+   * kept: it is how the remark is quoted, so it never moves (`model/numbering.ts`).
+   */
+  number?: number;
+  /** Initials of whoever made the mark, `VP` in `#3 VP`. */
+  initials?: string;
+  /**
+   * Which of the mapping's added PDFs this mark came from, by
+   * {@link PdfSource.id}. Absent for marks from the mapping's own PDF.
+   */
+  pdfId?: string;
+}
+
+/**
+ * A further PDF whose marks were added to an existing mapping — a second
+ * editor's copy, or the same editor's copy sent again with more marks on it.
+ * Its items carry this id in {@link ReviewItem.pdfId}.
+ */
+export interface PdfSource {
+  /** `pdf-2`, `pdf-3`… Unique within the mapping; the primary PDF is implicitly first. */
+  id: string;
+  /** Absolute path in memory; stored relative to the sidecar. */
+  path: string;
+  role: PdfRole;
+  imported?: boolean;
+  importedFrom?: string;
+  /** SHA-256 of the PDF when its marks were added — how a re-add is recognised. */
+  sha256?: string;
+  annotationCount?: number;
+  /** ISO-8601 time the PDF was added to the mapping. */
+  addedAt?: string;
+  /** Where these marks came from, when it differs from the mapping's. */
+  origin?: string;
+  /** The person who made these marks, when the PDF does not say. */
+  reviewer?: string;
 }
 
 /**
@@ -338,7 +374,43 @@ export interface ReviewSession {
   integrity?: SessionIntegrity;
   /** Files produced from this mapping (reports, stamped PDFs…). */
   artifacts?: Artifact[];
+  /** PDFs added to this mapping after its own, oldest first. */
+  extraPdfs?: PdfSource[];
   items: ReviewItem[];
+}
+
+/** The PDF an item's page and geometry refer to. */
+export function itemPdfPath(session: ReviewSession, item: ReviewItem): string {
+  if (!item.pdfId) return session.pdfPath;
+  return session.extraPdfs?.find((p) => p.id === item.pdfId)?.path ?? session.pdfPath;
+}
+
+/** Every PDF a mapping draws marks from, its own first. */
+export function allPdfPaths(session: ReviewSession): string[] {
+  return [
+    ...(session.pdfPath ? [session.pdfPath] : []),
+    ...(session.extraPdfs ?? []).map((p) => p.path),
+  ];
+}
+
+/**
+ * Who made the marks of one item's PDF when the PDF itself names nobody: the
+ * added PDF's own reviewer or origin, else the mapping's.
+ */
+export function markSourceName(
+  session: ReviewSession,
+  item: ReviewItem
+): string | undefined {
+  const extra = item.pdfId
+    ? session.extraPdfs?.find((p) => p.id === item.pdfId)
+    : undefined;
+  return (
+    extra?.reviewer ||
+    extra?.origin ||
+    session.mapping.reviewer ||
+    session.mapping.origin ||
+    undefined
+  );
 }
 
 /** Display name for a mapping: its label, else its origin, else its id. */

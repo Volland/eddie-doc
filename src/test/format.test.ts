@@ -116,6 +116,59 @@ describe("review format", () => {
     assert.deepStrictEqual(after!.integrity, before.integrity);
   });
 
+  it("round-trips remark numbers, added PDFs and which PDF each mark came from", () => {
+    const before = sampleSession();
+    before.items[0].number = 1;
+    before.items[0].initials = "VP";
+    before.items[1].number = 2;
+    before.items[1].pdfId = "pdf-2";
+    before.extraPdfs = [
+      {
+        id: "pdf-2",
+        path: "/proj/book/review/beta.pdf",
+        role: "annotated",
+        sha256: "c".repeat(64),
+        annotationCount: 1,
+        addedAt: "2026-09-16T10:00:00.000Z",
+        reviewer: "Mo Rahimi",
+        imported: true,
+        importedFrom: "/proj/downloads/beta.pdf",
+      },
+    ];
+
+    const doc = toDocument(before, SIDECAR);
+    assert.strictEqual(doc.pdfs?.[0].path, "review/beta.pdf", "added PDFs are sidecar-relative");
+    assert.strictEqual(doc.items[0].number, 1);
+    assert.strictEqual(doc.items[0].initials, "VP");
+    assert.strictEqual(doc.items[0].annotation.pdf, undefined, "the mapping's own PDF is implied");
+    assert.strictEqual(doc.items[1].annotation.pdf, "pdf-2");
+
+    const after = parse(serialize(before, SIDECAR), SIDECAR, before.adocPath)!;
+    assert.deepStrictEqual(after.extraPdfs, before.extraPdfs);
+    assert.deepStrictEqual(
+      after.items.map((i) => [i.number, i.initials, i.pdfId]),
+      [
+        [1, "VP", undefined],
+        [2, undefined, "pdf-2"],
+      ]
+    );
+  });
+
+  it("writes no added-PDF list or numbering fields a session does not have", () => {
+    const doc = toDocument(sampleSession(), SIDECAR);
+    assert.strictEqual("pdfs" in doc, false);
+    assert.strictEqual("number" in doc.items[0], false);
+    assert.strictEqual("initials" in doc.items[0], false);
+  });
+
+  it("ignores a nonsensical stored number rather than trusting it", () => {
+    const doc = toDocument(sampleSession(), SIDECAR);
+    (doc.items[0] as { number?: unknown }).number = -3;
+    (doc.items[1] as { number?: unknown }).number = "7";
+    const after = parse(JSON.stringify(doc), SIDECAR, "/proj/book/chapter-01.adoc")!;
+    assert.deepStrictEqual(after.items.map((i) => i.number), [undefined, undefined]);
+  });
+
   it("round-trips the round, mapping and PDF-role metadata", () => {
     const before = sampleSession();
     const doc = toDocument(before, SIDECAR);

@@ -27,6 +27,7 @@ import type {
   MatchMethod,
   PdfInfo,
   PdfRole,
+  PdfSource,
   QuoteSelector,
   Reply,
   ReviewItem,
@@ -78,6 +79,21 @@ export interface PdfRefDoc extends FileRefDoc {
   imported?: boolean;
   /** Original location of an imported PDF, relative to the sidecar when possible. */
   importedFrom?: string;
+}
+
+/**
+ * A PDF added to the mapping after its own: another editor's copy, or the same
+ * editor's copy sent again. Items from it name its `id` in `annotation.pdf`.
+ */
+export interface PdfSourceDoc extends PdfRefDoc {
+  /** `pdf-2`, `pdf-3`… unique within the mapping. */
+  id: string;
+  /** ISO-8601 time the PDF was added. */
+  addedAt?: string;
+  /** Where these marks came from, when it differs from the mapping's. */
+  origin?: string;
+  /** Who made these marks, when the PDF does not say. */
+  reviewer?: string;
 }
 
 /** The editing round this mapping belongs to. */
@@ -137,6 +153,8 @@ export interface AnnotationDoc {
   markedText?: string;
   /** For caret/insert marks: text left of the caret on the same line. */
   beforeText?: string;
+  /** Id of the added PDF (`pdfs[].id`) the mark came from; absent for `pdf`. */
+  pdf?: string;
   geometry: GeometryDoc;
 }
 
@@ -177,6 +195,10 @@ export interface StateDoc {
 export interface ItemDoc {
   /** Stable id, ideally the PDF annotation id; falls back to page+geometry. */
   id: string;
+  /** The remark's number within the mapping, as quoted: `3` in `#3 VP`. */
+  number?: number;
+  /** Initials of whoever made the mark: `VP` in `#3 VP`. */
+  initials?: string;
   annotation: AnnotationDoc;
   /** Durable source binding — survives edits the matcher cannot follow. */
   anchor?: SourceAnchor;
@@ -202,6 +224,8 @@ export interface ReviewDocumentV3 {
   mapping: MappingDoc;
   source: FileRefDoc;
   pdf: PdfRefDoc;
+  /** PDFs whose marks were added to this mapping after its own, oldest first. */
+  pdfs?: PdfSourceDoc[];
   artifacts?: ArtifactDoc[];
   items: ItemDoc[];
 }
@@ -438,6 +462,24 @@ export function toDocument(
         })
       )
     : undefined;
+  const pdfs: PdfSourceDoc[] | undefined = session.extraPdfs?.length
+    ? session.extraPdfs.map((p) =>
+        cleanUndefined({
+          id: p.id,
+          path: relFromSidecar(sidecarPath, p.path),
+          sha256: realSha(p.sha256),
+          annotationCount: p.annotationCount,
+          role: p.role ?? "annotated",
+          imported: p.imported || undefined,
+          importedFrom: p.importedFrom
+            ? relFromSidecar(sidecarPath, p.importedFrom)
+            : undefined,
+          addedAt: p.addedAt || undefined,
+          origin: p.origin || undefined,
+          reviewer: p.reviewer || undefined,
+        })
+      )
+    : undefined;
 
   const items: ItemDoc[] = session.items.map((it) => {
     const annotation: AnnotationDoc = cleanUndefined({
@@ -447,6 +489,7 @@ export function toDocument(
       anchoredText: it.anchoredText || undefined,
       markedText: it.markedText,
       beforeText: it.beforeText,
+      pdf: it.pdfId || undefined,
       geometry: {
         page: it.page,
         unit: "pt",
@@ -473,6 +516,8 @@ export function toDocument(
     });
     return cleanUndefined({
       id: it.id,
+      number: it.number,
+      initials: it.initials || undefined,
       annotation,
       anchor: cleanAnchor(it.anchor),
       match,
@@ -490,6 +535,7 @@ export function toDocument(
     mapping,
     source,
     pdf,
+    pdfs,
     artifacts,
     items,
   }) as ReviewDocumentV3;
@@ -577,6 +623,12 @@ function itemsFromDoc(doc: {
       beforeText: a.beforeText,
       author: a.author,
       rect: g.rect ?? [0, 0, 0, 0],
+      pdfId: typeof a.pdf === "string" && a.pdf ? a.pdf : undefined,
+      number:
+        Number.isInteger(d.number) && (d.number as number) > 0
+          ? d.number
+          : undefined,
+      initials: typeof d.initials === "string" && d.initials ? d.initials : undefined,
       match: d.match ?? null,
       resolved: !!s.resolved,
       confirmed: s.confirmed || undefined,
@@ -665,6 +717,27 @@ function fromV3(
             note: a.note,
           })
         )
+      : undefined,
+    extraPdfs: doc.pdfs?.length
+      ? doc.pdfs
+          .filter((p) => p && typeof p.id === "string" && typeof p.path === "string")
+          .map(
+            (p): PdfSource =>
+              cleanUndefined({
+                id: p.id,
+                path: absFromSidecar(sidecarPath, p.path),
+                role: asRole(p.role),
+                imported: p.imported || undefined,
+                importedFrom: p.importedFrom
+                  ? absFromSidecar(sidecarPath, p.importedFrom)
+                  : undefined,
+                sha256: realSha(p.sha256),
+                annotationCount: p.annotationCount,
+                addedAt: p.addedAt,
+                origin: p.origin,
+                reviewer: p.reviewer,
+              })
+          )
       : undefined,
     items: itemsFromDoc(doc),
   };

@@ -5,6 +5,27 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Add PDFs to an existing mapping.** *Add PDFs to This Mapping…* (view menu,
+  a mapping's context menu, or *Open PDF Review* on a document with history)
+  appends one or more PDFs' marks to a mapping's list. A mark the mapping
+  already holds is skipped, so the editor's re-sent copy contributes only its
+  new marks; the byte-identical file is refused outright. Each mark remembers
+  which PDF it came from, and *Preview in PDF* opens that one.
+- **Merge mappings.** *Merge Mappings into This One…* folds other mappings of the
+  same document — typically other editors' marks on the same round — into one
+  list. Resolved state, notes, replies, hand-made links and anchors move with
+  every mark; a remark both mappings hold is kept once with both copies' state
+  combined; the merged sidecars are removed.
+- **Numbered remarks.** Every mark gets a number and the initials of whoever made
+  it — `#3 VP` — leading every label, the report, and the text of stamped PDFs.
+  Numbers are stored and never change: re-maps, added PDFs and merges only ever
+  append. Initials fall back from the PDF author to the reviewer or origin you
+  recorded, and a placeholder author such as `Editor` does not count as a name.
+- Format: additive `pdfs`, `items[].number`, `items[].initials` and
+  `items[].annotation.pdf` (still version 3; see `docs/FORMAT.md`). Sidecars
+  written before this are numbered in reading order when loaded.
+
 Marks stop drifting. Re-matching an established link could only ever degrade it
 — it compares the editor's original PDF wording against prose that has since
 been rewritten — and it ran on every save. Links are now *maintained* rather

@@ -25,9 +25,11 @@ import {
   KIND_LABEL,
   PDF_ROLE_LABEL,
   REVIEW_TYPE_LABEL,
+  itemPdfPath,
   mappingLabel,
   revisionLabel,
 } from "./model/types.js";
+import { numberLabel } from "./model/numbering.js";
 import {
   DEFAULT_REVIEW_FOLDER,
   documentFolder,
@@ -238,6 +240,9 @@ export function activate(context: vscode.ExtensionContext): void {
         `${session.items.length} annotation(s), ${open} open\n` +
         `PDF: ${pdfName} (${PDF_ROLE_LABEL[session.pdf?.role ?? "annotated"]})` +
         (pdfMissing ? ` — NOT FOUND at ${session.pdfPath}` : "") +
+        (session.extraPdfs?.length
+          ? ` + ${session.extraPdfs.length} added PDF(s)`
+          : "") +
         (siblings.length > 1
           ? `\n${siblings.length} mappings across ${
               store.revisionsFor(adoc).length
@@ -395,6 +400,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand("eddieDoc.newRevision", async () => {
       await openReview(store, undefined, "new");
+    }),
+
+    // Continue a mapping: more marks from the same pass, in one list.
+    vscode.commands.registerCommand("eddieDoc.appendPdf", async (arg?: unknown) => {
+      await appendPdfs(store, sidecarArg(arg));
+    }),
+
+    // Several editors' mappings of the same document, worked through as one.
+    vscode.commands.registerCommand("eddieDoc.mergeMappings", async (arg?: unknown) => {
+      await mergeMappings(store, sidecarArg(arg));
     }),
 
     // Show one of the document's other mappings (from the tree or the picker).
@@ -840,8 +855,13 @@ async function openReview(
   store.tryLoadSidecar(adocPath);
   const existing = store.sessionsFor(adocPath);
 
-  const revision = await chooseRevision(store, adocPath, mode, existing);
-  if (!revision) return;
+  const choice = await chooseRevision(store, adocPath, mode, existing);
+  if (!choice) return;
+  if (choice.appendTo) {
+    await appendPdfs(store, choice.appendTo, [pdfPath]);
+    return;
+  }
+  const revision = choice.revision;
 
   // Re-opening the same PDF in the same round refreshes that mapping in place
   // instead of leaving a second copy of it beside the first.
@@ -915,6 +935,14 @@ async function openReview(
 
 interface RevisionPick extends vscode.QuickPickItem {
   revision: RevisionInfo;
+  /** Add the PDF's marks to this existing mapping instead of making a new one. */
+  appendTo?: string;
+}
+
+/** Where a PDF goes: a mapping of `revision`, or into an existing mapping. */
+interface RevisionChoice {
+  revision: RevisionInfo;
+  appendTo?: string;
 }
 
 /** Decide the round a PDF joins; undefined when the user backs out. */
@@ -923,12 +951,14 @@ async function chooseRevision(
   adocPath: string,
   mode: OpenMode,
   existing: ReviewSession[]
-): Promise<RevisionInfo | undefined> {
+): Promise<RevisionChoice | undefined> {
   // Nothing to choose between on a document's first review.
-  if (!existing.length) return store.nextRevision(adocPath);
-  if (mode === "new") return store.nextRevision(adocPath);
+  if (!existing.length) return { revision: store.nextRevision(adocPath) };
+  if (mode === "new") return { revision: store.nextRevision(adocPath) };
   if (mode === "current")
-    return store.latestRevision(adocPath) ?? store.nextRevision(adocPath);
+    return {
+      revision: store.latestRevision(adocPath) ?? store.nextRevision(adocPath),
+    };
 
   const next = store.nextRevision(adocPath);
   const picks: RevisionPick[] = [];
@@ -940,11 +970,23 @@ async function chooseRevision(
         rev.ordinal === (store.latestRevision(adocPath)?.ordinal ?? 0)
           ? "current round"
           : "",
-      detail: `Add these marks alongside ${inRound
+      detail: `A separate mapping alongside ${inRound
         .map((s) => mappingLabel(s))
         .join(", ")}`,
       revision: rev,
     });
+    // Continuing a mapping keeps one numbered list instead of starting another.
+    for (const s of inRound) {
+      picks.push({
+        label: `$(file-add) Add to ${mappingLabel(s)}`,
+        description: `${s.items.length} mark(s)`,
+        detail:
+          "Append these marks to that mapping's list. Marks it already has are " +
+          "skipped; new ones continue its numbering.",
+        revision: rev,
+        appendTo: s.sidecarPath,
+      });
+    }
   }
   picks.unshift({
     label: `$(add) Start ${revisionLabel(next)}`,
@@ -958,7 +1000,212 @@ async function chooseRevision(
     title: `Which round do these marks belong to? — ${path.basename(adocPath)}`,
     placeHolder: "Start a new round, or add to one already open",
   });
-  return chosen?.revision;
+  return chosen
+    ? { revision: chosen.revision, appendTo: chosen.appendTo }
+    : undefined;
+}
+
+/**
+ * Add one or more PDFs' marks to an existing mapping.
+ *
+ * Whose marks each file holds is asked per file, because the reason to do this
+ * is often that a second editor marked up their own copy — and a PDF that names
+ * nobody would otherwise leave those marks without initials.
+ */
+async function appendPdfs(
+  store: ReviewStore,
+  sidecarPath?: string,
+  pdfPaths?: string[]
+): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const session = sidecarPath
+    ? store.getBySidecar(sidecarPath)
+    : adocPath
+      ? store.get(adocPath)
+      : undefined;
+  if (!session) {
+    vscode.window.showInformationMessage(
+      "Eddie Doc: open a review first — PDFs are added to an existing mapping."
+    );
+    return;
+  }
+  const title = `${revisionLabel(session.revision)} · ${mappingLabel(session)}`;
+
+  if (!pdfPaths?.length) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: true,
+      openLabel: "Add marks to mapping",
+      title: `Add PDFs to ${title}`,
+      defaultUri: vscode.Uri.file(path.dirname(session.pdfPath || session.adocPath)),
+      filters: { PDF: ["pdf"] },
+    });
+    pdfPaths = picked?.map((u) => u.fsPath);
+  }
+  if (!pdfPaths?.length) return;
+
+  const who = new Map<string, string | undefined>();
+  for (const pdf of pdfPaths) {
+    const suggestion = path
+      .basename(pdf)
+      .replace(/\.pdf$/i, "")
+      .replace(/[._-]+/g, " ")
+      .trim();
+    const answer = await vscode.window.showInputBox({
+      title: `Whose marks are in ${path.basename(pdf)}?`,
+      prompt:
+        "The editor's name gives their marks initials when the PDF names " +
+        "nobody. Press Escape to skip.",
+      value: suggestion,
+      valueSelection: [0, suggestion.length],
+    });
+    who.set(pdf, answer?.trim() || undefined);
+  }
+
+  store.setActive(session.sidecarPath);
+  let added = 0;
+  let duplicates = 0;
+  const numbers: number[] = [];
+  const notes: string[] = [];
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Eddie Doc: adding marks to ${mappingLabel(session)}…`,
+    },
+    async () => {
+      for (const pdf of pdfPaths!) {
+        try {
+          const res = await store.appendPdf(session.sidecarPath, pdf, {
+            threshold: threshold(),
+            reviewer: who.get(pdf),
+            importPdf: importPdfs(),
+          });
+          if (res.alreadyPresent) {
+            notes.push(`${path.basename(pdf)} is already part of this mapping`);
+            continue;
+          }
+          added += res.added.length;
+          duplicates += res.duplicates;
+          for (const it of res.added) if (it.number != null) numbers.push(it.number);
+        } catch (e) {
+          notes.push(`${path.basename(pdf)}: ${String(e)}`);
+        }
+      }
+    }
+  );
+
+  const range = numbers.length
+    ? ` (#${Math.min(...numbers)}–#${Math.max(...numbers)})`
+    : "";
+  const parts = [`added ${added} new mark(s)${range} to ${title}`];
+  if (duplicates) parts.push(`skipped ${duplicates} it already had`);
+  const message = `Eddie Doc: ${parts.join(", ")}.`;
+  if (notes.length) {
+    vscode.window.showWarningMessage(`${message} ${notes.join("; ")}.`);
+  } else {
+    vscode.window.showInformationMessage(message);
+  }
+  if (!added) return;
+  if (activeAdocPath() !== session.adocPath) {
+    await vscode.window.showTextDocument(vscode.Uri.file(session.adocPath), {
+      preview: false,
+    });
+  }
+  if (autoAnchor()) await autoAnchorReview(store, session.adocPath);
+  await vscode.commands.executeCommand("eddieDoc.annotations.focus");
+}
+
+interface MergePick extends vscode.QuickPickItem {
+  sidecarPath: string;
+}
+
+/**
+ * Fold other mappings of the document into one, so marks from several editors
+ * are worked through — and numbered — as a single list.
+ */
+async function mergeMappings(
+  store: ReviewStore,
+  sidecarPath?: string
+): Promise<void> {
+  const adocPath = resolveTargetAdoc(store);
+  const target = sidecarPath
+    ? store.getBySidecar(sidecarPath)
+    : adocPath
+      ? store.get(adocPath)
+      : undefined;
+  if (!target) {
+    vscode.window.showInformationMessage("Eddie Doc: no review loaded.");
+    return;
+  }
+  const candidates = store
+    .sessionsFor(target.adocPath)
+    .filter((s) => s.sidecarPath !== target.sidecarPath);
+  if (!candidates.length) {
+    vscode.window.showInformationMessage(
+      `Eddie Doc: ${mappingLabel(target)} is the only mapping of ` +
+        `${path.basename(target.adocPath)} — there is nothing to merge into it.`
+    );
+    return;
+  }
+
+  const targetTitle = `${revisionLabel(target.revision)} · ${mappingLabel(target)}`;
+  const picks: MergePick[] = candidates
+    .slice()
+    .reverse()
+    .map((s) => ({
+      label: `${revisionLabel(s.revision)} · ${mappingLabel(s)}`,
+      description: `${s.items.length} mark(s) · ${
+        s.items.filter((i) => !i.resolved).length
+      } open`,
+      detail: s.mapping.reviewer ?? s.mapping.origin,
+      sidecarPath: s.sidecarPath,
+      // The usual case is the other editors of the same round.
+      picked: s.revision.id === target.revision.id,
+    }));
+  const chosen = await vscode.window.showQuickPick(picks, {
+    title: `Merge into ${targetTitle}`,
+    placeHolder: "Choose the mappings whose marks should join this one",
+    canPickMany: true,
+  });
+  if (!chosen?.length) return;
+
+  const moving = chosen.reduce(
+    (n, c) => n + (store.getBySidecar(c.sidecarPath)?.items.length ?? 0),
+    0
+  );
+  const confirm = await vscode.window.showWarningMessage(
+    `Merge ${chosen.length} mapping(s) into ${targetTitle}?`,
+    {
+      modal: true,
+      detail:
+        `${moving} mark(s) move across with their resolved state, notes, ` +
+        `replies and anchors, and are numbered after the ${target.items.length} ` +
+        `already there. Marks the target already has are folded into its own ` +
+        `copy. The merged mappings' review files are then deleted; their PDFs ` +
+        `and reports are left alone.`,
+    },
+    "Merge"
+  );
+  if (confirm !== "Merge") return;
+
+  try {
+    const res = store.mergeMappings(
+      target.sidecarPath,
+      chosen.map((c) => c.sidecarPath)
+    );
+    const folded = res.folded ? `, ${res.folded} repeated mark(s) folded in` : "";
+    const message =
+      `Eddie Doc: merged ${res.removed.length} mapping(s) into ` +
+      `${mappingLabel(target)} — ${res.moved} mark(s) added${folded}.`;
+    if (res.failed.length) {
+      vscode.window.showWarningMessage(
+        `${message} Could not delete: ${res.failed.join("; ")}`
+      );
+    } else {
+      vscode.window.showInformationMessage(message);
+    }
+  } catch (e) {
+    vscode.window.showErrorMessage(`Eddie Doc: merge failed — ${String(e)}`);
+  }
 }
 
 /**
@@ -1763,11 +2010,12 @@ function previewItem(
   const session = store.get(adocPath);
   const item = store.findItem(adocPath, id);
   if (!session || !item) return;
+  const num = numberLabel(item);
   preview.show(
-    session.pdfPath,
+    itemPdfPath(session, item),
     item.page,
     item.rect,
-    `${KIND_LABEL[item.kind]} · p${item.page}`
+    `${num ? `${num} · ` : ""}${KIND_LABEL[item.kind]} · p${item.page}`
   );
 }
 

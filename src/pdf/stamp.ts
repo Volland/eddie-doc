@@ -30,6 +30,7 @@ import {
 } from "pdf-lib";
 import type { AnchoredItem } from "./anchor.js";
 import { KIND_LABEL, type AnnotationKind, type ReviewItem } from "../model/types.js";
+import { numberLabel } from "../model/numbering.js";
 
 export interface StampOptions {
   /** Include resolved items, drawn faintly. Default true. */
@@ -288,6 +289,9 @@ function drawnKind(item: ReviewItem, degraded: boolean): AnnotationKind {
 /** Prefix the editor's comment with status and any loss of precision. */
 function contentsFor(item: ReviewItem, degraded: boolean): string {
   const parts: string[] = [];
+  // The number leads, so the editor can quote it back in their reply.
+  const num = numberLabel(item);
+  if (num) parts.push(num);
   if (item.resolved) parts.push("[resolved]");
   if (degraded && assertsAboutWords(item.kind)) {
     const was = (item.markedText || "").replace(/\s+/g, " ").trim();

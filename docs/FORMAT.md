@@ -78,6 +78,7 @@ one directory. Where Eddie Doc puts them is a setting, not part of the format.
 | `mapping` | ✓ | What this mapping is and where its marks came from. |
 | `source` | ✓ | The `.adoc` input — see [File references](#file-references). |
 | `pdf` | ✓ | The PDF input, plus `annotationCount` and `role`. |
+| `pdfs` | – | PDFs whose marks were added to this mapping later — see [Added PDFs](#pdfs--added-pdfs). |
 | `artifacts` | – | Files produced from this mapping (reports, stamped PDFs). |
 | `items` | ✓ | The review items — see [Items](#items). |
 
@@ -164,6 +165,44 @@ they are not interchangeable:
 | `stamped` | An Eddie Doc output carrying marks and replies. |
 | `other` | Anything else. |
 
+### `pdfs` — added PDFs
+
+A mapping can grow past its first PDF. The editor sends the chapter again with
+more marks on it, or a second editor marks up their own copy of the same pass,
+and those marks are **added to the mapping** instead of starting another one —
+or two mappings are **merged** into one. Each further PDF is listed here, oldest
+first:
+
+```jsonc
+"pdfs": [
+  { "id": "pdf-2", "path": "pdf/acme-copyedit-pdf-2.pdf", "sha256": "…",
+    "annotationCount": 6, "role": "annotated",
+    "addedAt": "2026-07-14T08:00:00.000Z" },
+  { "id": "pdf-3", "path": "../../../in/beta-proofread.pdf", "sha256": "…",
+    "annotationCount": 2, "role": "annotated",
+    "addedAt": "2026-07-15T11:30:00.000Z",
+    "origin": "Beta Proofing", "reviewer": "Mo Rahimi" }
+]
+```
+
+Every entry is a [file reference](#file-references) with the `pdf` fields, plus:
+
+| Field | Req | Meaning |
+| --- | :-: | --- |
+| `id` | ✓ | `pdf-2`, `pdf-3`… unique within the mapping. The mapping's own `pdf` is implicitly the first. |
+| `addedAt` | – | When the PDF's marks were added. |
+| `origin` | – | Where these marks came from, when that differs from `mapping.origin`. |
+| `reviewer` | – | Who made these marks, when the PDF does not say. |
+
+An item from an added PDF names it in `annotation.pdf`, and its `id` is prefixed
+with it (`pdf-3/p2-highlight-48-719`): geometry-derived ids are the same for
+marks in the same place on two copies of a chapter, and the prefix keeps them
+apart. Its `page` and `geometry` refer to that PDF.
+
+A PDF's `sha256` is how adding it again is recognised. Adding a *different* file
+skips any mark the mapping already holds — same kind, author, comment, marked
+text and page — so a re-sent copy contributes only what is new on it.
+
 ### `artifacts` — what this mapping produced
 
 ```jsonc
@@ -183,6 +222,8 @@ kept in three separate blocks so they can evolve and diff independently.
 ```jsonc
 {
   "id": "p2-highlight-48-719",
+  "number": 1,
+  "initials": "AE",
   "annotation": {
     "kind": "highlight",
     "author": "Editor",
@@ -215,6 +256,25 @@ Eddie Doc currently derives it from page + rounded geometry
 id (`NM`) when available, since geometry-derived ids change if the PDF is
 re-exported at a different position.
 
+### `number` and `initials` — how the remark is quoted
+
+Every item is numbered within its mapping, and labelled with the initials of
+whoever made the mark: `#3 VP`. It is the reference an author quotes back to the
+editor, so it leads every label Eddie Doc shows and is written into stamped PDFs.
+
+| Field | Req | Meaning |
+| --- | :-: | --- |
+| `number` | – | Positive integer, unique within the mapping. |
+| `initials` | – | From `annotation.author`; when the PDF names nobody (or only a placeholder such as `Editor`), from the added PDF's `reviewer`/`origin`, else the mapping's. |
+
+**Numbers never change once assigned.** A re-map, a re-sort, a re-exported PDF
+and a new added PDF all leave existing numbers alone; new marks take the next
+number after the highest in use. A merge keeps the target's numbers and numbers
+each merged mapping's items after them, in their old order. A new *round*
+starts again at 1. A consumer reading a file without these fields should number
+it the same way: in reading order — the mapping's own PDF first, then each of
+`pdfs` in order; within one PDF by page, then top to bottom, then left to right.
+
 ### `annotation` — from the PDF (immutable)
 
 | Field | Req | Meaning |
@@ -225,6 +285,7 @@ re-exported at a different position.
 | `anchoredText` | – | Text physically under the markup. Intentionally over-captures the whole line for robust matching. |
 | `markedText` | – | The tightly-bounded text actually inside the markup quads — used for character-precise delete/replace. |
 | `beforeText` | – | For `insert` (caret) marks: the text left of the caret on the same line, to place the insertion at the exact offset. |
+| `pdf` | – | The `pdfs[].id` this mark came from. Absent for marks from the mapping's own `pdf`. |
 | `geometry` | ✓ | Position in the PDF — see below. |
 
 **`geometry`** declares its coordinate system explicitly so a non-PDF-aware

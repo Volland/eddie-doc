@@ -12,6 +12,7 @@
  * the remaining prose. Nothing here mutates the sidecar: the comment is what the
  * editor wrote, and it is stored exactly as it arrived (`docs/FORMAT.md`).
  */
+import { numberLabel } from "./numbering.js";
 import type { ReviewItem } from "./types.js";
 
 /**
@@ -45,8 +46,18 @@ export function withoutRef(comment: string | undefined): string {
   );
 }
 
-/** This item's reference, as a display prefix: `"[12] "`, or `""`. */
+/**
+ * Everything an item is addressed by, most durable first: our own number and
+ * the marker's initials (`#3 VP`), then the editor's query number if they wrote
+ * one (`[12]`). Undefined when the item has neither.
+ */
+export function itemRef(item: ReviewItem): string | undefined {
+  const parts = [numberLabel(item), commentRef(item.comment)].filter(Boolean);
+  return parts.length ? parts.join(" ") : undefined;
+}
+
+/** This item's reference, as a display prefix: `"#3 VP [12] "`, or `""`. */
 export function refPrefix(item: ReviewItem): string {
-  const ref = commentRef(item.comment);
+  const ref = itemRef(item);
   return ref ? `${ref} ` : "";
 }

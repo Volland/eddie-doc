@@ -78,6 +78,16 @@
         "icon": "$(add)"
       },
       {
+        "command": "eddieDoc.appendPdf",
+        "title": "Eddie Doc: Add PDFs to This Mapping…",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "eddieDoc.mergeMappings",
+        "title": "Eddie Doc: Merge Mappings into This One…",
+        "icon": "$(merge)"
+      },
+      {
         "command": "eddieDoc.editMappingInfo",
         "title": "Eddie Doc: Edit Round Details…",
         "icon": "$(edit)"
@@ -277,14 +287,24 @@
           "group": "1_rounds@1"
         },
         {
-          "command": "eddieDoc.switchMapping",
+          "command": "eddieDoc.appendPdf",
           "when": "view == eddieDoc.annotations",
           "group": "1_rounds@2"
         },
         {
+          "command": "eddieDoc.mergeMappings",
+          "when": "view == eddieDoc.annotations && eddieDoc.hasRounds",
+          "group": "1_rounds@3"
+        },
+        {
+          "command": "eddieDoc.switchMapping",
+          "when": "view == eddieDoc.annotations",
+          "group": "1_rounds@4"
+        },
+        {
           "command": "eddieDoc.editMappingInfo",
           "when": "view == eddieDoc.annotations",
-          "group": "1_rounds@3"
+          "group": "1_rounds@5"
         },
         {
           "command": "eddieDoc.anchorSource",
@@ -322,6 +342,16 @@
           "command": "eddieDoc.editMappingInfo",
           "when": "view == eddieDoc.annotations && viewItem =~ /^mapping/",
           "group": "inline@1"
+        },
+        {
+          "command": "eddieDoc.appendPdf",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^mapping/",
+          "group": "2_combine@0"
+        },
+        {
+          "command": "eddieDoc.mergeMappings",
+          "when": "view == eddieDoc.annotations && viewItem =~ /^mapping/",
+          "group": "2_combine@1"
         },
         {
           "command": "eddieDoc.deleteMapping",
