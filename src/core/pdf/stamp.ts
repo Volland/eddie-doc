@@ -97,8 +97,13 @@ function pdfDate(iso: string): string {
  * string. Getting this wrong turns "don't" into mojibake in Acrobat.
  */
 function textString(s: string): PDFString | PDFHexString {
-  // eslint-disable-next-line no-control-regex
-  return /^[\x00-\xFF]*$/.test(s) ? PDFString.of(s) : PDFHexString.fromText(s);
+  return isLatin1(s) ? PDFString.of(s) : PDFHexString.fromText(s);
+}
+
+/** True when every UTF-16 code unit is at most U+00FF, i.e. fits in one byte. */
+function isLatin1(s: string): boolean {
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) > 0xff) return false;
+  return true;
 }
 
 /** Side of a sticky-note icon, in points. */

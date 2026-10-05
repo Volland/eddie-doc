@@ -96,13 +96,15 @@ A setting switches the preview to a view that draws the page and the marked rect
 
 pdfjs's browser build runs with its worker embedded in `main.js`, started from a Blob URL, and falls back to the main thread when a WebView refuses a Blob worker.
 
-[[src/hosts/obsidian/pdf/engine.ts#useObsidianPdfEngine]] picks the mode. `npm run verify:obsidian-engine` checks the main-thread path against the sample PDF under Node. In desktop Obsidian 1.8.4 and 1.13.7 the Blob worker starts and parses the sample PDF; whether a phone's WebView accepts it, and the speed on a large PDF there, can only be checked on a device.
+[[src/hosts/obsidian/pdf/engine.ts#useObsidianPdfEngine]] picks the mode. The fallback runs the same worker code from a copy bundled as an ordinary module, so no script element is created and nothing is evaluated.
 
-## Verification in a real Obsidian
+### Not leaving a global behind
 
-`npm run e2e:obsidian` starts a private Obsidian instance on a throwaway vault, drives it over the debugging port, and asserts what a user would see.
+pdfjs's worker module sets `globalThis.pdfjsWorker` when imported, and Obsidian's own PDF viewer reads that global from the same window.
 
-`scripts/e2e-obsidian.cjs` needs the desktop app and a built plugin, uses a temporary user-data folder so none of the user's vaults are touched, and stops only the process group it started. It covers load and registration, opening a manuscript, mapping a PDF through the real pickers, the panel, replies and resolve, both PDF viewers, applying and undoing an edit, a sidecar changed from outside, renames, command gating, unload, Obsidian's mobile emulation, and with `E2E_ASCIIDOC_LIVE=1` the pairing with AsciiDoc Live. It found three bugs no other test could: a view field that overwrote Obsidian's `titleEl`, a selection made outside the panel not showing its thread, and the built-in viewer ignoring `rect`.
+Left set, it makes the built-in viewer run the plugin's worker code instead of its own, and it stopped landing on the right page. The import is wrapped so the global is restored, and in fallback mode it is offered to pdfjs only for the duration of the one synchronous `getDocument` call that reads it. The end-to-end suite checks that the window is clean after loading and after a fallback-mode mapping. This was found only by that suite.
+
+`npm run verify:obsidian-engine` checks the fallback against the sample PDF under Node. In desktop Obsidian 1.8.4 and 1.13.7 the Blob worker starts and parses it, and with `Worker` made unavailable the fallback maps all five annotations. Whether a phone's WebView accepts the Blob worker, and the speed on a large PDF there, can only be checked on a device.
 
 ## Capabilities
 

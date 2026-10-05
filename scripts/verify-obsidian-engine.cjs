@@ -5,7 +5,8 @@
  * annotations the Node engine finds.
  *
  * Node has no `Worker`, so this exercises the *main-thread fallback* path, the
- * one used when a WebView refuses a Blob worker. It does not exercise the Blob
+ * one used when a WebView refuses a Blob worker. That path runs the worker code
+ * bundled into the plugin, so the bundle is what is being tested. It does not exercise the Blob
  * worker itself; only a real Obsidian can. See docs/obsidian-qa.md.
  */
 const fs = require("node:fs");
@@ -32,7 +33,7 @@ async function main() {
     import { useObsidianPdfEngine } from ${q(path.join(root, "src/hosts/obsidian/pdf/engine.js"))};
     import { extractAnnotations, readPages } from ${q(path.join(root, "src/core/pdf/extract.js"))};
     (async () => {
-      const mode = useObsidianPdfEngine({ loadClassicScript: async (src) => { (0, eval)(src); } });
+      const mode = useObsidianPdfEngine();
       const bytes = new Uint8Array(readFileSync(${q(path.join(root, "sample/chapter-01.annotated.pdf"))}));
       const annots = await extractAnnotations(bytes);
       const pages = await readPages(bytes);
@@ -49,7 +50,14 @@ async function main() {
     } }],
   });
 
-  const stdout = execFileSync("node", [out], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  let stdout;
+  try {
+    stdout = execFileSync("node", [out], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (e) {
+    // Show why it failed; the child's stderr is the only place the real error appears.
+    console.error(String(e.stderr || e.stdout || e.message).split("\n").filter((l) => !/^Warning:/.test(l)).slice(0, 14).join("\n"));
+    process.exit(1);
+  }
   const got = JSON.parse(stdout.slice(stdout.indexOf("{")));
   const want = ["highlight@2", "strikeout@2", "comment@3", "highlight@4", "strikeout@5"];
   const ok = got.pages === 5 && JSON.stringify(got.kinds) === JSON.stringify(want);

@@ -1,41 +1,15 @@
 import "../../../core/pdf/polyfill.js"; // must precede the pdfjs import — patches Promise.withResolvers
 import * as pdfjs from "pdfjs-dist/build/pdf.min.mjs";
+// The worker module sets a window global on import; the guard files put it back (see them).
+import "./workerGuardBegin.js";
+import { WorkerMessageHandler } from "pdfjs-dist/build/pdf.worker.min.mjs";
+import "./workerGuardEnd.js";
 import workerSource from "virtual:pdf-worker-source";
 import { setPdfEngine, type PdfEngine } from "../../../core/pdf/engine.js";
 
 export type WorkerMode = "worker" | "main-thread";
 
-export interface EngineOptions {
-  /**
-   * Run the worker script on the main thread. The default injects a `<script>`
-   * from a Blob URL (no `eval`); a test running outside a browser supplies its
-   * own.
-   */
-  loadClassicScript?: (source: string) => Promise<void>;
-}
-
-/** Inject `source` as a classic script and resolve once it has run. */
-function loadViaScriptTag(source: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-    const el = activeDocument.createElement("script");
-    el.src = url;
-    el.onload = () => {
-      el.remove();
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    el.onerror = () => {
-      el.remove();
-      reject(new Error("could not start the PDF engine on the main thread"));
-    };
-    activeDocument.head.appendChild(el);
-  });
-}
-
 let mode: WorkerMode = "worker";
-/** Resolves once the engine can parse: immediately for a worker, after the script loads on the main thread. */
-let ready: Promise<void> = Promise.resolve();
 
 /** Which way the engine is running; "worker" until a worker is found to fail. */
 export function workerMode(): WorkerMode {
@@ -43,28 +17,47 @@ export function workerMode(): WorkerMode {
 }
 
 /**
+ * Run `fn` — which calls pdfjs's `getDocument` — with the bundled worker code offered
+ * to pdfjs's main-thread mode, then take the offer back.
+ *
+ * pdfjs reads `globalThis.pdfjsWorker` once, synchronously, while it sets up its
+ * "fake worker", and keeps what it found. Every plugin and Obsidian itself share one
+ * window, and Obsidian's own PDF viewer reads the same global, so it must not be left
+ * set (see workerGuardBegin.ts). Setting it only for the duration of this synchronous
+ * call means nothing else can observe it. Only used when a real worker is unavailable.
+ */
+function withMainThreadWorker<T>(fn: () => T): T {
+  if (mode !== "main-thread") return fn();
+  const g = globalThis as { pdfjsWorker?: unknown };
+  const had = Object.prototype.hasOwnProperty.call(g, "pdfjsWorker");
+  const previous = g.pdfjsWorker;
+  g.pdfjsWorker = { WorkerMessageHandler };
+  try {
+    return fn();
+  } finally {
+    if (had) g.pdfjsWorker = previous;
+    else delete g.pdfjsWorker;
+  }
+}
+
+/**
  * Install pdfjs's browser build as the core's PDF engine.
  *
- * A worker cannot be loaded from a file inside the plugin on mobile, so the
- * worker's source ships inside `main.js` and is started from a Blob URL. If a
- * WebView refuses it — `new Worker` throws, or the worker reports an error — pdfjs
- * runs on the main thread through the same source, and the next `getDocument`
- * waits for that to finish loading. Neither path has been exercised on a phone
- * yet; see docs/obsidian-spike-results.md.
+ * A worker cannot be loaded from a file inside the plugin on mobile, so the worker's
+ * source ships inside `main.js` as text and is started from a Blob URL. If a WebView
+ * refuses that — `new Worker` throws, or the worker reports an error — pdfjs runs the
+ * same worker code on the main thread instead, from the copy bundled into `main.js`
+ * (see {@link withMainThreadWorker}). Nothing is injected into the page: no script
+ * element and no `eval`. Neither path has been exercised on every phone; see
+ * docs/obsidian-spike-results.md.
  */
-export function useObsidianPdfEngine(opts: EngineOptions = {}): WorkerMode {
-  const load = opts.loadClassicScript ?? loadViaScriptTag;
-  ready = Promise.resolve();
+export function useObsidianPdfEngine(): WorkerMode {
   mode = "worker";
 
   const fallBack = () => {
     if (mode === "main-thread") return;
     mode = "main-thread";
     pdfjs.GlobalWorkerOptions.workerPort = null;
-    ready = load(workerSource);
-    // A failed load is reported to whoever opens a document next (they await it);
-    // without this it would also surface as an unhandled rejection here.
-    ready.catch(() => undefined);
   };
 
   try {
@@ -76,12 +69,9 @@ export function useObsidianPdfEngine(opts: EngineOptions = {}): WorkerMode {
     fallBack();
   }
 
-  const engine: PdfEngine = {
-    getDocument: (src) => ({
-      promise: ready.then(() => pdfjs.getDocument(src).promise as ReturnType<PdfEngine["getDocument"]>["promise"]),
-    }),
-  };
-  setPdfEngine(engine);
+  setPdfEngine({
+    getDocument: (src: unknown) => withMainThreadWorker(() => pdfjs.getDocument(src)),
+  } as unknown as PdfEngine);
   return mode;
 }
 
@@ -114,11 +104,12 @@ export interface PreviewDocument {
  * waits for the main-thread worker if that is the mode in use.
  */
 export async function openPreviewDocument(data: Uint8Array): Promise<PreviewDocument> {
-  await ready;
-  const task = pdfjs.getDocument({
-    data: new Uint8Array(data), // pdfjs detaches what it is given
-    isEvalSupported: false,
-    verbosity: 0,
-  });
+  const task = withMainThreadWorker(() =>
+    pdfjs.getDocument({
+      data: new Uint8Array(data), // pdfjs detaches what it is given
+      isEvalSupported: false,
+      verbosity: 0,
+    })
+  );
   return (await task.promise) as PreviewDocument;
 }

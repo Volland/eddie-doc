@@ -5,6 +5,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-05
+
+Obsidian plugin, fixes from the community directory's code review:
+
+- The PDF engine no longer creates a `<script>` element. Its main-thread fallback, used
+  if a device refuses background workers, now runs the worker code bundled into
+  `main.js`, so no code is loaded or evaluated at run time. `main.js` grows from 2.2 to
+  3.4 MB because the worker code is in it twice (as text for the worker, and as a module
+  for the fallback).
+- Removed a lint suppression comment in the PDF stamping code; the check it guarded is
+  now a plain loop with identical behaviour.
+- Guarded against a bug this change would otherwise have introduced: pdfjs's worker module
+  sets a `pdfjsWorker` global on import, which Obsidian's own PDF viewer reads. The plugin
+  restores it, and the end-to-end suite checks it (73 checks, up from 65).
+
 ## [1.4.2] - 2026-10-05
 
 Release files now carry GitHub artifact attestations, which the community directory

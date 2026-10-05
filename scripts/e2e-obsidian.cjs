@@ -210,6 +210,10 @@ async function main() {
   check(await ev(`JSON.stringify(${P}.claimed)`) === `["adoc","asciidoc"]`, "claimed .adoc and .asciidoc when nothing else holds them", await ev(`JSON.stringify(${P}.claimed)`));
   check(await ev(`app.viewRegistry.typeByExtension.adoc`) === "markdown", "the view registry maps adoc to the markdown view");
   check(await ev(`${P}.workerMode`) === "worker", "PDF parsing uses a Blob worker (not the fallback)", await ev(`${P}.workerMode`));
+  // pdfjs's worker module sets this window global when imported. Obsidian's own PDF viewer
+  // reads it, so leaving ours behind makes the built-in viewer run OUR worker code.
+  check(await ev(`typeof window.pdfjsWorker`) === "undefined", "the plugin leaves no pdfjsWorker global in the window", await ev(`typeof window.pdfjsWorker`));
+  check(await ev(`!document.querySelector("script[src^='blob:']")`), "and creates no script elements");
 
   section("2. A manuscript opens as source");
   await ev(`(async()=>{await app.workspace.getLeaf("tab").openFile(app.vault.getAbstractFileByPath(${JSON.stringify(ADOC)}))})()`);
@@ -269,8 +273,11 @@ async function main() {
   await ev(`${P}.updateSettings({pdfPreview:"builtin"})`);
   await ev(`[...document.querySelectorAll(".eddie-detail .eddie-actions button")].find(b=>b.textContent==="Preview PDF").click()`);
   check(await waitFor(`app.workspace.getLeavesOfType("pdf").length===1`, 10000), "Obsidian's built-in viewer opens the PDF");
-  await sleep(2500);
-  check(await ev(`(()=>{try{return app.workspace.getLeavesOfType("pdf")[0].view.viewer.child.pdfViewer.pdfViewer.currentPageNumber}catch{return -1}})()`) === 3, "and lands on page 3");
+  // The viewer loads the document asynchronously; wait for it to report a page.
+  const viewerPage = `(()=>{try{return app.workspace.getLeavesOfType("pdf")[0].view.viewer.child.pdfViewer.pdfViewer.currentPageNumber}catch{return -1}})()`;
+  await waitFor(`${viewerPage} === 3`, 12000);
+  const landed = await ev(viewerPage);
+  check(landed === 3, "and lands on page 3", `it reported page ${landed}`);
   await ev(`app.workspace.getLeavesOfType("pdf").forEach(l=>l.detach())`);
   await ev(`${P}.updateSettings({pdfPreview:"own"})`);
 
@@ -323,6 +330,25 @@ async function main() {
   await ev(`(async()=>{await app.plugins.enablePlugin("eddie-doc")})()`);
   check(await waitFor(`!!${P} && Object.keys(app.commands.commands).filter(c=>c.startsWith("eddie-doc:")).length>=32`, 8000), "it enables again");
   check(await waitFor(`${P}.store.all().length===1`, 15000), "and finds its review again");
+
+  section("9b. Without Web Workers (the fallback a phone's WebView may need)");
+  // Make `new Worker` throw before the plugin starts, as a WebView that refuses Blob workers
+  // would, and check that PDF parsing still works by running on the main thread.
+  await ev(`(async()=>{ await app.plugins.disablePlugin("eddie-doc"); window.__realWorker = window.Worker; window.Worker = function(){ throw new Error("Workers are blocked") }; await app.plugins.enablePlugin("eddie-doc"); })()`);
+  check(await waitFor(`!!${P} && ${P}.store.all().length===1`, 15000), "the plugin starts with Workers unavailable");
+  check(await ev(`${P}.workerMode`) === "main-thread", "and falls back to parsing on the main thread", await ev(`${P}.workerMode`));
+  const fb = JSON.parse(await ev(`(async()=>{
+    const src = app.vault.getAbstractFileByPath("Manuscript/ch1.adoc");
+    await app.vault.copy(src, "Manuscript/fallback.adoc");
+    const s = await ${P}.store.loadReview("Manuscript/fallback.adoc", "Inbox/chapter-01.annotated.pdf", {threshold:0.5, revision:{id:"rev-1",ordinal:1}, importPdf:false});
+    const out = JSON.stringify({items: s.items.length, mapped: s.items.filter(i=>i.match).length});
+    await ${P}.store.deleteMapping(s.sidecarPath);
+    return out })()`));
+  check(fb.items === 5 && fb.mapped === 5, "mapping the sample PDF still finds all 5 annotations", JSON.stringify(fb));
+  check(await ev(`!document.querySelector("script[src^='blob:']")`), "no script element was created to do it");
+  check(await ev(`typeof window.pdfjsWorker`) === "undefined", "and the fallback leaves no pdfjsWorker global behind either");
+  await ev(`(async()=>{ await app.plugins.disablePlugin("eddie-doc"); window.Worker = window.__realWorker; await app.plugins.enablePlugin("eddie-doc"); const f=app.vault.getAbstractFileByPath("Manuscript/fallback.adoc"); if(f) await app.vault.delete(f); })()`);
+  check(await waitFor(`!!${P} && ${P}.workerMode==="worker" && ${P}.store.all().length===1`, 15000), "with Workers restored it uses a worker again");
 
   section("10. Phone layout (Obsidian's mobile emulation)");
   await ev(`app.emulateMobile(true)`);
