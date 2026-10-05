@@ -1,7 +1,7 @@
 import * as assert from "node:assert";
-import type { PageText, PositionedText } from "../pdf/extract.js";
-import { anchorItems } from "../pdf/anchor.js";
-import type { ReviewItem } from "../model/types.js";
+import type { PageText, PositionedText } from "../core/pdf/extract.js";
+import { anchorItems } from "../core/pdf/anchor.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 /** A page of rendered lines, as asciidoctor-pdf emits them. */
 function page(n: number, lines: string[]): PageText {

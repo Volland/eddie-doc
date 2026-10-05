@@ -12,8 +12,8 @@ import {
   rootMarkdown,
   threadLabel,
   threadSignature,
-} from "../ui/threadModel.js";
-import type { Reply, ReviewItem } from "../model/types.js";
+} from "../core/thread/threadModel.js";
+import type { Reply, ReviewItem } from "../core/model/types.js";
 
 function item(over: Partial<ReviewItem> = {}): ReviewItem {
   return {

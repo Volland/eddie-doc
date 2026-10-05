@@ -8,8 +8,8 @@
  * array operations on top of this.
  */
 import * as assert from "node:assert";
-import { parse, serialize, toDocument } from "../model/format.js";
-import type { Reply, ReviewItem, ReviewSession } from "../model/types.js";
+import { parse, serialize, toDocument } from "../core/model/format.js";
+import type { Reply, ReviewItem, ReviewSession } from "../core/model/types.js";
 
 const SIDECAR = "/proj/book/chapter-01.review.json";
 

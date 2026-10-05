@@ -14,7 +14,7 @@ import {
   slug,
   uniqueId,
   type LayoutConfig,
-} from "../model/layout.js";
+} from "../core/model/layout.js";
 
 const CFG: LayoutConfig = {
   workspaceRoot: "/proj",

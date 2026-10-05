@@ -21,3 +21,13 @@ site/**
 schema/**
 docs/**
 .github/**
+dist/obsidian/**
+manifest.json
+versions.json
+tsconfig.core.json
+CONTEXT.md
+CLAUDE.md
+lat.md/**
+openspec/**
+.claude/**
+.mcp.json

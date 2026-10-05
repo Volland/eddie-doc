@@ -10,8 +10,8 @@ import {
   namespacedId,
   nextPdfId,
   rawIdOf,
-} from "../model/combine.js";
-import type { PdfSource, ReviewItem, ReviewSession } from "../model/types.js";
+} from "../core/model/combine.js";
+import type { PdfSource, ReviewItem, ReviewSession } from "../core/model/types.js";
 
 function item(id: string, over: Partial<ReviewItem> = {}): ReviewItem {
   return {

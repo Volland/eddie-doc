@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The core must not import vscode, obsidian or Node builtins (docs/adr/0001).
+      - run: npm run check:core
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # The built Obsidian bundle: engine on the sample PDF, then load + map + reload
+      # against a stub Obsidian and an in-memory vault. Not a substitute for
+      # docs/obsidian-qa.md, which needs a real Obsidian.
+      - run: npm run verify:cli
+      - run: npm run verify:obsidian-engine
+      - run: npm run smoke:obsidian

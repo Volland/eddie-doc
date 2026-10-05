@@ -5,7 +5,7 @@ import {
   tokenizeSourceLine,
   isStructuralLine,
   commentLineFlags,
-} from "../matching/normalize.js";
+} from "../core/matching/normalize.js";
 
 describe("normalize", () => {
   it("strips inline AsciiDoc markup but keeps prose words", () => {

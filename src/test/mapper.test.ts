@@ -4,8 +4,8 @@ import {
   effectiveLine,
   isConfident,
   type MapStats,
-} from "../matching/mapper.js";
-import type { RawAnnotation, ReviewItem } from "../model/types.js";
+} from "../core/matching/mapper.js";
+import type { RawAnnotation, ReviewItem } from "../core/model/types.js";
 
 const SOURCE = [
   "= Doc", // 0

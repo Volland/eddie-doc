@@ -4,9 +4,9 @@ import {
   initialsOf,
   maxNumber,
   numberLabel,
-} from "../model/numbering.js";
-import { itemRef, refPrefix } from "../model/refs.js";
-import type { ReviewItem } from "../model/types.js";
+} from "../core/model/numbering.js";
+import { itemRef, refPrefix } from "../core/model/refs.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 function item(id: string, over: Partial<ReviewItem> = {}): ReviewItem {
   return {

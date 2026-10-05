@@ -1,0 +1,111 @@
+[
+  {
+    "id": "p2-highlight-48-719",
+    "kind": "highlight",
+    "page": 2,
+    "comment": "Strong framing — keep this.",
+    "anchoredText": "well-defined relationships. Unlike a relational database, a graph places relationships at the center of the model.",
+    "markedText": "relationships at the center of the model",
+    "author": "Editor",
+    "rect": [
+      48.2400016784668,
+      718.5800170898438,
+      547.0401611328125,
+      748.6400146484375
+    ],
+    "match": {
+      "startLine": 6,
+      "endLine": 7,
+      "score": 1,
+      "sourceExcerpt": "are connected by well-defined relationships. Unlike a relational database, a graph places relationships at the center of the model."
+    },
+    "resolved": false
+  },
+  {
+    "id": "p2-strikeout-131-675",
+    "kind": "strikeout",
+    "page": 2,
+    "comment": "Delete: too advanced for an intro.",
+    "anchoredText": "simple triples to richer metagraph structures.",
+    "markedText": "richer metagraph structures",
+    "author": "Editor",
+    "rect": [
+      131.49449157714844,
+      675.02001953125,
+      272.97125244140625,
+      689.2999877929688
+    ],
+    "match": {
+      "startLine": 10,
+      "endLine": 10,
+      "score": 1,
+      "sourceExcerpt": "We will move from simple triples to richer metagraph structures."
+    },
+    "resolved": false
+  },
+  {
+    "id": "p3-comment-527-705",
+    "kind": "comment",
+    "page": 3,
+    "comment": "Add a small diagram illustrating this edge.",
+    "anchoredText": "A relationship connects two entities and carries its own meaning. The phrase \"Alice knows Bob\" is a",
+    "author": "Editor",
+    "rect": [
+      527.06887,
+      704.86,
+      543.06887,
+      720.86
+    ],
+    "match": {
+      "startLine": 18,
+      "endLine": 19,
+      "score": 1,
+      "sourceExcerpt": "A relationship connects two entities and carries its own meaning. The phrase \"Alice knows Bob\" is a single relationship with a clear direction and type."
+    },
+    "resolved": false
+  },
+  {
+    "id": "p4-highlight-48-734",
+    "kind": "highlight",
+    "page": 4,
+    "comment": "Reword: 'trust or lineage'.",
+    "anchoredText": "Reification lets us make statements about statements. When we need to attach a confidence score or a provenance record to a fact, we treat the fact itself as a node that other edges can point to.",
+    "markedText": "confidence score or a provenance record to",
+    "author": "Editor",
+    "rect": [
+      48.2400016784668,
+      734.3600463867188,
+      547.0402221679688,
+      764.4199829101562
+    ],
+    "match": {
+      "startLine": 25,
+      "endLine": 27,
+      "score": 1,
+      "sourceExcerpt": "Reification lets us make statements about statements. When we need to attach a confidence score or a provenance record to a fact, we treat the fact itself as a node that other edges can point to."
+    },
+    "resolved": false
+  },
+  {
+    "id": "p5-strikeout-263-750",
+    "kind": "strikeout",
+    "page": 5,
+    "comment": "Cut — repeats the intro.",
+    "anchoredText": "Knowledge graphs put relationships first, entities are stable and reusable, and reification unlocks",
+    "markedText": "entities are stable and reusable",
+    "author": "Editor",
+    "rect": [
+      262.65850830078125,
+      750.1400146484375,
+      423.05926513671875,
+      764.4199829101562
+    ],
+    "match": {
+      "startLine": 34,
+      "endLine": 35,
+      "score": 1,
+      "sourceExcerpt": "Knowledge graphs put relationships first, entities are stable and reusable, and reification unlocks statements about statements. The next chapter turns these"
+    },
+    "resolved": false
+  }
+]

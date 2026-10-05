@@ -1,0 +1,161 @@
+/**
+ * Render a review session as a human-readable Markdown report — the artifact an
+ * author sends back to their editor: what was handled, what's still open, and
+ * what the matcher couldn't place. Pure over the domain model (no `vscode`),
+ * so the extension command, the CLI and tests all share one renderer.
+ */
+import * as path from "../util/path.js";
+import type { Storage } from "../host/storage.js";
+import { effectiveLine, isConfident } from "../matching/mapper.js";
+import { itemRef, withoutRef } from "./refs.js";
+import { sha256 } from "./format.js";
+import { KIND_LABEL, type ReviewItem, type ReviewSession } from "./types.js";
+
+const UNMATCHED = Number.MAX_SAFE_INTEGER;
+
+export interface ReportOptions {
+  /** Score at/above which an auto-match counts as confident (mirrors the tree). */
+  highConfidence?: number;
+  /** Include the resolved section (default true). */
+  includeResolved?: boolean;
+  /** Warn that the inputs changed since mapping ran. */
+  stale?: boolean;
+  /** Timestamp printed in the header; defaults to `session.updatedAt`. */
+  generatedAt?: string;
+}
+
+
+function clean(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function quote(s: string, max = 300): string {
+  const c = clean(s);
+  return c.length > max ? c.slice(0, max) + "…" : c;
+}
+
+function locationLabel(item: ReviewItem): string {
+  const line = effectiveLine(item);
+  if (line === UNMATCHED) return "no source match";
+  const m = item.match;
+  const span =
+    m && m.endLine > m.startLine && item.manualLine == null
+      ? `lines ${m.startLine + 1}–${m.endLine + 1}`
+      : `line ${line + 1}`;
+  if (item.manualLine != null) return `${span} · manual`;
+  if (!m) return span;
+  const method = m.method && m.method !== "fuzzy" ? `${m.method} ` : "";
+  return `${span} · ${method}${m.score.toFixed(2)}`;
+}
+
+function renderItem(item: ReviewItem): string {
+  const head = [
+    // Leads the line, so the editor can find their own numbered query at a glance.
+    itemRef(item)
+      ? `**${itemRef(item)}** ${KIND_LABEL[item.kind]}`
+      : `**${KIND_LABEL[item.kind]}**`,
+    `p${item.page}`,
+    locationLabel(item),
+    item.author ? item.author : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const lines = [`- ${head}`];
+  if (item.comment) lines.push(`  > ${quote(withoutRef(item.comment))}`);
+  const marked = item.markedText || item.anchoredText;
+  if (marked) lines.push(`  - marked: “${quote(marked, 160)}”`);
+  if (item.match?.sourceExcerpt) {
+    lines.push(`  - source: \`${quote(item.match.sourceExcerpt, 160)}\``);
+  }
+  if (item.note) lines.push(`  - note: ${quote(item.note)}`);
+  return lines.join("\n");
+}
+
+function section(title: string, items: ReviewItem[]): string[] {
+  if (!items.length) return [];
+  return [`## ${title} (${items.length})`, "", ...items.map(renderItem), ""];
+}
+
+/** Render `session` as a Markdown document. */
+export function renderReport(
+  session: ReviewSession,
+  opts: ReportOptions = {}
+): string {
+  const highConf = opts.highConfidence ?? 0.75;
+  const includeResolved = opts.includeResolved ?? true;
+
+  const items = session.items;
+  const unresolved = items.filter((i) => !i.resolved);
+  const located = unresolved.filter((i) => effectiveLine(i) !== UNMATCHED);
+  const open = located.filter((i) => isConfident(i, highConf));
+  const review = located.filter((i) => !isConfident(i, highConf));
+  const unmatched = unresolved.filter((i) => effectiveLine(i) === UNMATCHED);
+  const resolved = items.filter((i) => i.resolved);
+
+  const sourceName = path.basename(session.adocPath);
+  // A mapping that grew from several PDFs names them all, with whose marks each
+  // added one holds when that was recorded.
+  const pdfNames: string[] = session.pdfPath
+    ? [`\`${path.basename(session.pdfPath)}\``]
+    : [];
+  for (const p of session.extraPdfs ?? []) {
+    const who = p.reviewer || p.origin;
+    pdfNames.push(`\`${path.basename(p.path)}\`${who ? ` (${who})` : ""}`);
+  }
+  const pdfLine = pdfNames.length ? pdfNames.join(", ") : "`(unknown)`";
+
+  const out: string[] = [
+    `# Review report — ${sourceName}`,
+    "",
+    `- **Source:** \`${sourceName}\``,
+    `- **Annotated PDF${pdfNames.length > 1 ? "s" : ""}:** ${pdfLine}`,
+    `- **Generated:** ${opts.generatedAt ?? session.updatedAt}`,
+    `- **Progress:** ${resolved.length} of ${items.length} resolved · ` +
+      `${open.length} open · ${review.length} need review · ` +
+      `${unmatched.length} unmatched`,
+    "",
+  ];
+  if (opts.stale) {
+    out.push(
+      "> ⚠️ The source or PDF changed after this mapping ran — line numbers " +
+        "may be off. Re-run **Re-map Annotations** before relying on them.",
+      ""
+    );
+  }
+
+  out.push(...section("Open", open));
+  out.push(...section("Needs review", review));
+  out.push(...section("Unmatched", unmatched));
+  if (includeResolved) out.push(...section("Resolved", resolved));
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+/**
+ * True when the sidecar's recorded input fingerprints no longer match the
+ * files on disk (or the files can't be read). Missing fingerprints — e.g. a
+ * freshly-migrated v1 session — count as not stale: there is nothing to
+ * compare against.
+ */
+export async function isSessionStale(
+  session: ReviewSession,
+  storage: Storage
+): Promise<boolean> {
+  const integ = session.integrity;
+  if (!integ) return false;
+  const differs = async (file: string, expected?: string): Promise<boolean> => {
+    if (!expected) return false;
+    try {
+      return sha256(await storage.readBytes(file)) !== expected;
+    } catch {
+      return true;
+    }
+  };
+  if (await differs(session.adocPath, integ.sourceSha256)) return true;
+  if (await differs(session.pdfPath, integ.pdfSha256)) return true;
+  for (const p of session.extraPdfs ?? []) {
+    if (await differs(p.path, p.sha256)) return true;
+  }
+  return false;
+}

@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
-import type { PageText, PositionedText } from "../pdf/extract.js";
-import { buildPdfIndex, locateInPdf } from "../pdf/locate.js";
+import type { PageText, PositionedText } from "../core/pdf/extract.js";
+import { buildPdfIndex, locateInPdf } from "../core/pdf/locate.js";
 
 /**
  * Build a page of rendered lines. Each line is one text run, as asciidoctor-pdf

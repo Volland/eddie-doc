@@ -3,7 +3,7 @@ import {
   buildSourceIndex,
   matchAnchor,
   topMatches,
-} from "../matching/fuzzyMatch.js";
+} from "../core/matching/fuzzyMatch.js";
 
 const SOURCE = [
   "= Chapter One", // 0

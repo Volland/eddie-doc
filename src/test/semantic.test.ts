@@ -4,8 +4,8 @@ import {
   semanticFallback,
   MemoryEmbedCache,
   type FetchLike,
-} from "../matching/semantic.js";
-import type { ReviewItem } from "../model/types.js";
+} from "../core/matching/semantic.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 describe("buildBlocks", () => {
   it("splits prose into paragraph blocks with line ranges", () => {

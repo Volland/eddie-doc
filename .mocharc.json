@@ -1,5 +1,5 @@
 {
   "spec": "out/test/**/*.test.js",
-  "require": "scripts/mocha-vscode.cjs",
+  "require": "scripts/mocha-setup.cjs",
   "timeout": 10000
 }

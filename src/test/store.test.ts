@@ -2,9 +2,10 @@ import * as assert from "node:assert";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { ReviewStore } from "../model/store.js";
-import { serialize } from "../model/format.js";
-import type { ReviewItem, ReviewSession } from "../model/types.js";
+import { ReviewStore } from "../core/model/store.js";
+import { testHost } from "./testHost.js";
+import { serialize } from "../core/model/format.js";
+import type { ReviewItem, ReviewSession } from "../core/model/types.js";
 
 /**
  * A project on disk: a manuscript folder with real .adoc files, and a review
@@ -22,7 +23,7 @@ function adoc(rel: string): string {
 }
 
 /** Write a sidecar for one mapping, the way the store would, and load it. */
-function seed(
+async function seed(
   adocPath: string,
   opts: {
     ordinal: number;
@@ -32,7 +33,7 @@ function seed(
     sidecarPath?: string;
     items?: ReviewItem[];
   }
-): ReviewSession {
+): Promise<ReviewSession> {
   const revision = { id: `rev-${opts.ordinal}`, ordinal: opts.ordinal };
   const sidecarPath =
     opts.sidecarPath ?? store.sidecarPathFor(adocPath, revision, opts.mappingId);
@@ -54,7 +55,7 @@ function seed(
   };
   fs.mkdirSync(path.dirname(sidecarPath), { recursive: true });
   fs.writeFileSync(sidecarPath, serialize(session, sidecarPath), "utf8");
-  const loaded = store.loadSidecarFile(sidecarPath, adocPath);
+  const loaded = await store.loadSidecarFile(sidecarPath, adocPath);
   assert.ok(loaded, `failed to load seeded sidecar ${sidecarPath}`);
   return loaded!;
 }
@@ -62,7 +63,7 @@ function seed(
 describe("review store — rounds and mappings", () => {
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "eddie-store-"));
-    store = new ReviewStore();
+    store = new ReviewStore(testHost().host);
     store.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
   });
 
@@ -71,7 +72,7 @@ describe("review store — rounds and mappings", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("writes a mapping into its round's folder, mirroring the manuscript tree", () => {
+  it("writes a mapping into its round's folder, mirroring the manuscript tree", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
     const sidecar = store.sidecarPathFor(
       file,
@@ -96,7 +97,7 @@ describe("review store — rounds and mappings", () => {
     );
   });
 
-  it("falls back to the legacy path when no review folder is configured", () => {
+  it("falls back to the legacy path when no review folder is configured", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
     store.configure({ workspaceRoot: root, reviewFolder: "" });
     assert.strictEqual(
@@ -116,11 +117,11 @@ describe("review store — rounds and mappings", () => {
     );
   });
 
-  it("groups a document's mappings into rounds, oldest first", () => {
+  it("groups a document's mappings into rounds, oldest first", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    seed(file, { ordinal: 2, mappingId: "beta", origin: "Beta" });
-    seed(file, { ordinal: 1, mappingId: "acme", origin: "Acme" });
-    seed(file, { ordinal: 2, mappingId: "acme", origin: "Acme" });
+    await seed(file, { ordinal: 2, mappingId: "beta", origin: "Beta" });
+    await seed(file, { ordinal: 1, mappingId: "acme", origin: "Acme" });
+    await seed(file, { ordinal: 2, mappingId: "acme", origin: "Acme" });
 
     assert.deepStrictEqual(
       store.sessionsFor(file).map((s) => `${s.revision.id}/${s.mapping.id}`),
@@ -134,16 +135,16 @@ describe("review store — rounds and mappings", () => {
     assert.strictEqual(store.nextRevision(file).id, "rev-3");
   });
 
-  it("starts at round 1 for a document with no history", () => {
+  it("starts at round 1 for a document with no history", async () => {
     const file = adoc("manuscript/chapter-02.adoc");
     assert.strictEqual(store.latestRevision(file), undefined);
     assert.strictEqual(store.nextRevision(file).ordinal, 1);
   });
 
-  it("shows one mapping at a time, and switches on request", () => {
+  it("shows one mapping at a time, and switches on request", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    const first = seed(file, { ordinal: 1, mappingId: "acme" });
-    const second = seed(file, { ordinal: 2, mappingId: "acme" });
+    const first = await seed(file, { ordinal: 1, mappingId: "acme" });
+    const second = await seed(file, { ordinal: 2, mappingId: "acme" });
 
     // With no explicit choice the newest round is what you see.
     assert.strictEqual(store.get(file)?.sidecarPath, second.sidecarPath);
@@ -152,10 +153,10 @@ describe("review store — rounds and mappings", () => {
     assert.strictEqual(store.setActive(path.join(root, "nope.review.json")), false);
   });
 
-  it("mints a mapping id that is free within its round", () => {
+  it("mints a mapping id that is free within its round", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
     const rev = { id: "rev-1", ordinal: 1 };
-    seed(file, { ordinal: 1, mappingId: "copyedit" });
+    await seed(file, { ordinal: 1, mappingId: "copyedit" });
     assert.strictEqual(
       store.mintMappingId(file, rev, "/downloads/copyedit.pdf"),
       "copyedit-2"
@@ -167,11 +168,11 @@ describe("review store — rounds and mappings", () => {
     );
   });
 
-  it("renames a round across every mapping in it", () => {
+  it("renames a round across every mapping in it", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    const a = seed(file, { ordinal: 2, mappingId: "acme" });
-    const b = seed(file, { ordinal: 2, mappingId: "beta" });
-    const other = seed(file, { ordinal: 1, mappingId: "acme" });
+    const a = await seed(file, { ordinal: 2, mappingId: "acme" });
+    const b = await seed(file, { ordinal: 2, mappingId: "beta" });
+    const other = await seed(file, { ordinal: 1, mappingId: "acme" });
 
     store.describeMapping(a.sidecarPath, {
       revision: { label: "Copyedit" },
@@ -194,9 +195,9 @@ describe("review store — rounds and mappings", () => {
     // …but the id names the file, so it is never touched.
     assert.strictEqual(store.getBySidecar(a.sidecarPath)?.mapping.id, "acme");
     // It survives a reload from disk.
-    const reread = new ReviewStore();
+    const reread = new ReviewStore(testHost().host);
     reread.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
-    reread.tryLoadSidecar(file);
+    await reread.tryLoadSidecar(file);
     assert.strictEqual(
       reread.getBySidecar(b.sidecarPath)?.revision.label,
       "Copyedit"
@@ -204,9 +205,9 @@ describe("review store — rounds and mappings", () => {
     reread.dispose();
   });
 
-  it("records produced artifacts against the mapping that made them", () => {
+  it("records produced artifacts against the mapping that made them", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    const s = seed(file, { ordinal: 1, mappingId: "acme" });
+    const s = await seed(file, { ordinal: 1, mappingId: "acme" });
     const report = path.join(path.dirname(s.sidecarPath), "acme.review.md");
     store.recordArtifact(s.sidecarPath, { kind: "report", path: report });
     store.recordArtifact(s.sidecarPath, { kind: "report", path: report });
@@ -218,27 +219,27 @@ describe("review store — rounds and mappings", () => {
     );
   });
 
-  it("discovers every round of a document from the review folder alone", () => {
+  it("discovers every round of a document from the review folder alone", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    seed(file, { ordinal: 1, mappingId: "acme" });
-    seed(file, { ordinal: 2, mappingId: "acme" });
-    seed(file, { ordinal: 2, mappingId: "beta" });
+    await seed(file, { ordinal: 1, mappingId: "acme" });
+    await seed(file, { ordinal: 2, mappingId: "acme" });
+    await seed(file, { ordinal: 2, mappingId: "beta" });
 
-    const fresh = new ReviewStore();
+    const fresh = new ReviewStore(testHost().host);
     fresh.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
-    const active = fresh.tryLoadSidecar(file);
+    const active = await fresh.tryLoadSidecar(file);
     assert.ok(active);
     assert.strictEqual(fresh.sessionsFor(file).length, 3);
     assert.strictEqual(fresh.revisionsFor(file).length, 2);
     fresh.dispose();
   });
 
-  it("deletes one mapping without touching the manuscript or its siblings", () => {
+  it("deletes one mapping without touching the manuscript or its siblings", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    const a = seed(file, { ordinal: 2, mappingId: "acme" });
-    const b = seed(file, { ordinal: 2, mappingId: "beta" });
+    const a = await seed(file, { ordinal: 2, mappingId: "acme" });
+    const b = await seed(file, { ordinal: 2, mappingId: "beta" });
 
-    assert.ok(store.deleteMapping(b.sidecarPath));
+    assert.ok(await store.deleteMapping(b.sidecarPath));
     assert.strictEqual(fs.existsSync(b.sidecarPath), false);
     assert.strictEqual(fs.existsSync(a.sidecarPath), true);
     assert.strictEqual(fs.existsSync(file), true);
@@ -246,10 +247,10 @@ describe("review store — rounds and mappings", () => {
     assert.strictEqual(store.get(file)?.sidecarPath, a.sidecarPath);
   });
 
-  it("moves a legacy sidecar into the review folder, rewriting its paths", () => {
+  it("moves a legacy sidecar into the review folder, rewriting its paths", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
     const legacy = path.join(root, "manuscript", "chapter-01.review.json");
-    seed(file, { ordinal: 1, mappingId: "chapter-01", sidecarPath: legacy });
+    await seed(file, { ordinal: 1, mappingId: "chapter-01", sidecarPath: legacy });
 
     const steps = store.planMigration();
     assert.strictEqual(steps.length, 1);
@@ -266,7 +267,7 @@ describe("review store — rounds and mappings", () => {
       )
     );
 
-    const res = store.migrate(steps);
+    const res = await store.migrate(steps);
     assert.deepStrictEqual([res.moved, res.failed], [1, []]);
     assert.strictEqual(fs.existsSync(legacy), false);
     assert.strictEqual(fs.existsSync(steps[0].to), true);
@@ -285,9 +286,9 @@ describe("review store — rounds and mappings", () => {
     assert.strictEqual(store.planMigration().length, 0);
   });
 
-  it("has nothing to migrate when reviews already live in the folder", () => {
+  it("has nothing to migrate when reviews already live in the folder", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    seed(file, { ordinal: 1, mappingId: "acme" });
+    await seed(file, { ordinal: 1, mappingId: "acme" });
     assert.strictEqual(store.planMigration().length, 0);
   });
 });
@@ -310,7 +311,7 @@ function mark(id: string, over: Partial<ReviewItem> = {}): ReviewItem {
 describe("review store — numbering and merging mappings", () => {
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "eddie-store-"));
-    store = new ReviewStore();
+    store = new ReviewStore(testHost().host);
     store.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
   });
 
@@ -319,9 +320,9 @@ describe("review store — numbering and merging mappings", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("numbers a sidecar written before numbering, and keeps those numbers on write", () => {
+  it("numbers a sidecar written before numbering, and keeps those numbers on write", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    const s = seed(file, {
+    const s = await seed(file, {
       ordinal: 1,
       mappingId: "acme",
       origin: "Acme Editorial",
@@ -342,20 +343,21 @@ describe("review store — numbering and merging mappings", () => {
     );
 
     store.toggleResolved(file, "second");
+    await store.flush();
     const onDisk = JSON.parse(fs.readFileSync(s.sidecarPath, "utf8"));
     const second = onDisk.items.find((i: { id: string }) => i.id === "second");
     assert.deepStrictEqual([second.number, second.initials], [2, "AE"]);
   });
 
-  it("merges other editors' mappings into one and removes their files", () => {
+  it("merges other editors' mappings into one and removes their files", async () => {
     const file = adoc("manuscript/chapter-01.adoc");
-    const acme = seed(file, {
+    const acme = await seed(file, {
       ordinal: 1,
       mappingId: "acme",
       origin: "Acme",
       items: [mark("a", { author: "Rachel Green" })],
     });
-    const beta = seed(file, {
+    const beta = await seed(file, {
       ordinal: 1,
       mappingId: "beta",
       origin: "Beta",
@@ -365,14 +367,14 @@ describe("review store — numbering and merging mappings", () => {
       ],
     });
     const other = adoc("manuscript/chapter-02.adoc");
-    const elsewhere = seed(other, { ordinal: 1, mappingId: "gamma" });
+    const elsewhere = await seed(other, { ordinal: 1, mappingId: "gamma" });
 
-    assert.throws(
-      () => store.mergeMappings(acme.sidecarPath, [elsewhere.sidecarPath]),
+    await assert.rejects(
+      store.mergeMappings(acme.sidecarPath, [elsewhere.sidecarPath]),
       /different document/
     );
 
-    const res = store.mergeMappings(acme.sidecarPath, [beta.sidecarPath]);
+    const res = await store.mergeMappings(acme.sidecarPath, [beta.sidecarPath]);
     assert.deepStrictEqual([res.moved, res.folded, res.failed], [2, 0, []]);
     assert.deepStrictEqual(res.removed, [beta.sidecarPath]);
     assert.strictEqual(fs.existsSync(beta.sidecarPath), false);
@@ -384,9 +386,9 @@ describe("review store — numbering and merging mappings", () => {
     assert.strictEqual(store.get(file)?.sidecarPath, acme.sidecarPath);
 
     // What is on disk is what a fresh load sees.
-    const fresh = new ReviewStore();
+    const fresh = new ReviewStore(testHost().host);
     fresh.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
-    const reloaded = fresh.loadSidecarFile(acme.sidecarPath, file)!;
+    const reloaded = (await fresh.loadSidecarFile(acme.sidecarPath, file))!;
     fresh.dispose();
     const rows = reloaded.items
       .map((i) => [i.id, i.number, i.initials, i.pdfId, i.resolved])

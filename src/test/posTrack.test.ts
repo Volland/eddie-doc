@@ -3,7 +3,7 @@ import {
   shiftLine,
   countNewlines,
   type ContentChange,
-} from "../matching/posTrack.js";
+} from "../core/matching/posTrack.js";
 
 /** A single-line insertion of `n` blank lines above `atLine`. */
 function insertLines(atLine: number, n: number): ContentChange {

@@ -15,9 +15,9 @@ import {
   PDFRef,
   PDFString,
 } from "pdf-lib";
-import { stampPdf } from "../pdf/stamp.js";
-import type { AnchoredItem, Precision } from "../pdf/anchor.js";
-import type { ReviewItem } from "../model/types.js";
+import { stampPdf } from "../core/pdf/stamp.js";
+import type { AnchoredItem, Precision } from "../core/pdf/anchor.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 /** A blank one-page PDF to stamp into. */
 async function blankPdf(): Promise<Uint8Array> {

@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
-import { scoreItems, type GoldenCase } from "../benchmark/score.js";
-import type { ReviewItem } from "../model/types.js";
+import { scoreItems, type GoldenCase } from "../hosts/cli/benchmark/score.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 function item(comment: string, over: Partial<ReviewItem> = {}): ReviewItem {
   return {

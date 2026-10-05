@@ -6,8 +6,8 @@ import {
   toDocument,
   sha256,
   EMPTY_SHA256,
-} from "../model/format.js";
-import type { ReviewSession } from "../model/types.js";
+} from "../core/model/format.js";
+import type { ReviewSession } from "../core/model/types.js";
 
 const SIDECAR = "/proj/book/chapter-01.review.json";
 

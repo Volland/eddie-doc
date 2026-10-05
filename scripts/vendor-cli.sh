@@ -7,7 +7,7 @@
 #
 # e.g. scripts/vendor-cli.sh ~/Documents/publishing/manning/pavlyshyn/misc/eddie
 #
-# TWO files are required, not one: src/pdf/extract.ts points pdfjs at
+# TWO files are required, not one: src/core/pdf/extract.ts points pdfjs at
 # `pdf.worker.mjs` sitting beside the bundle, so cli.js alone cannot read a PDF.
 # A VERSION stamp goes along with them so stamp-pdf.sh can warn when the vendored
 # copy has drifted from the extension that wrote the sidecar.

@@ -6,8 +6,8 @@
  * `[#anchor]` — never gets one of those promoted to a heading.
  */
 import * as assert from "node:assert";
-import { commentRef, refPrefix, withoutRef } from "../model/refs.js";
-import type { ReviewItem } from "../model/types.js";
+import { commentRef, refPrefix, withoutRef } from "../core/model/refs.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 describe("commentRef", () => {
   it("finds a reference wherever the editor put it", () => {

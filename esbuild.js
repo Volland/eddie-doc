@@ -62,13 +62,99 @@ const STDOUT_GUARD = `
 })();
 `;
 
+/**
+ * Obsidian plugin: one `main.js` (plus manifest and styles) that must run on
+ * desktop AND mobile, where there is no Node. Three things follow:
+ *  - `obsidian`, `electron` and CodeMirror are Obsidian's own; bundling a second
+ *    copy of CodeMirror breaks `instanceof` checks and facet identity.
+ *  - pdfjs's worker cannot be loaded from a file inside the plugin on mobile, so
+ *    it is built as a classic script and embedded in `main.js` as a string.
+ *  - no Node builtin may survive in the output; the build fails if one does.
+ */
+async function buildObsidian() {
+  const worker = await esbuild.build({
+    entryPoints: ["src/hosts/obsidian/pdf/workerEntry.ts"],
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "es2020",
+    minify: true,
+    write: false,
+    logLevel: "warning",
+  });
+  const workerSource = worker.outputFiles[0].text;
+
+  /** `import src from "virtual:pdf-worker-source"` → the worker script, as text. */
+  const embedWorker = {
+    name: "embed-pdf-worker",
+    setup(b) {
+      b.onResolve({ filter: /^virtual:pdf-worker-source$/ }, (a) => ({
+        path: a.path,
+        namespace: "pdf-worker",
+      }));
+      b.onLoad({ filter: /.*/, namespace: "pdf-worker" }, () => ({
+        contents: `export default ${JSON.stringify(workerSource)};`,
+        loader: "js",
+      }));
+    },
+  };
+
+  const out = path.join(__dirname, "dist", "obsidian");
+  fs.mkdirSync(out, { recursive: true });
+  const result = await esbuild.build({
+    entryPoints: ["src/hosts/obsidian/main.ts"],
+    outfile: path.join(out, "main.js"),
+    bundle: true,
+    format: "cjs",
+    platform: "browser",
+    target: "es2020",
+    external: ["obsidian", "electron", "@codemirror/*", "@lezer/*"],
+    plugins: [embedWorker],
+    define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
+    minify: production,
+    sourcemap: production ? false : "inline",
+    legalComments: "none",
+    metafile: true,
+    logLevel: "info",
+  });
+
+  // Fail the build if anything Node-only was pulled into the bundle.
+  const text = fs.readFileSync(path.join(out, "main.js"), "utf8");
+  const NODE = ["fs", "path", "os", "crypto", "child_process", "worker_threads", "module", "url", "stream", "http", "https", "zlib", "net", "canvas"];
+  const leaked = NODE.filter((m) =>
+    new RegExp(`require\\(["'](node:)?${m}["']\\)`).test(text)
+  );
+  if (leaked.length) {
+    throw new Error(
+      `obsidian bundle requires Node modules (${leaked.join(", ")}); they do not exist on mobile.`
+    );
+  }
+  const kb = Math.round(fs.statSync(path.join(out, "main.js")).size / 1024);
+  if (kb > 4096) console.warn(`[obsidian] main.js is ${kb} KB — check what grew.`);
+
+  // Manifest carries the package version; styles are copied as they are.
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "manifest.json"), "utf8"));
+  manifest.version = pkg.version;
+  fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  fs.copyFileSync(
+    path.join(__dirname, "src/hosts/obsidian/styles.css"),
+    path.join(out, "styles.css")
+  );
+  return result;
+}
+
 async function main() {
+  if (process.argv.includes("--obsidian-only")) {
+    await buildObsidian();
+    return;
+  }
   copyPdfAssets();
   const entries = [
-    { entry: "src/extension.ts", outfile: "dist/extension.js", external: ["vscode"] },
+    { entry: "src/hosts/vscode/extension.ts", outfile: "dist/extension.js", external: ["vscode"] },
     // CLI entries write machine-readable output; guard their stdout.
-    { entry: "src/cli.ts", outfile: "dist/cli.js", external: [], guardStdout: true },
-    { entry: "src/benchmark/main.ts", outfile: "dist/bench.js", external: [], guardStdout: true },
+    { entry: "src/hosts/cli/cli.ts", outfile: "dist/cli.js", external: [], guardStdout: true },
+    { entry: "src/hosts/cli/benchmark/main.ts", outfile: "dist/bench.js", external: [], guardStdout: true },
   ].filter((e) => fs.existsSync(path.join(__dirname, e.entry)));
 
   const contexts = await Promise.all(
@@ -90,6 +176,7 @@ async function main() {
     await Promise.all(contexts.map((c) => c.rebuild()));
     await Promise.all(contexts.map((c) => c.dispose()));
   }
+  if (!process.argv.includes("--no-obsidian")) await buildObsidian();
 }
 
 main().catch((e) => {

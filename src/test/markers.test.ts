@@ -8,7 +8,7 @@ import {
   isMarkerLine,
   resolveAnchor,
   stripMarkers,
-} from "../source/markers.js";
+} from "../core/source/markers.js";
 
 /** A chapter shaped like the real manuscript: attribute lines, figures, prose. */
 const DOC = [

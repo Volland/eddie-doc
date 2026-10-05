@@ -666,22 +666,32 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node esbuild.js --production",
+    "verify:cli": "node scripts/verify-cli.cjs",
+    "e2e:obsidian": "node scripts/e2e-obsidian.cjs",
+    "smoke:obsidian": "node scripts/smoke-obsidian.cjs",
+    "test:obsidian": "npm run build:obsidian && npm run verify:obsidian-engine && npm run smoke:obsidian",
+    "verify:obsidian-engine": "node scripts/verify-obsidian-engine.cjs",
+    "build:obsidian": "node esbuild.js --production --obsidian-only",
+    "check:core": "node scripts/check-core-boundary.mjs && tsc -p tsconfig.core.json",
+    "build": "npm run check:core && node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "compile-tests": "tsc -p . --outDir out",
     "typecheck": "tsc --noEmit -p .",
-    "pretest": "npm run compile-tests",
+    "pretest": "npm run check:core && npm run compile-tests",
     "test": "mocha \"out/test/**/*.test.js\"",
     "cli": "node dist/cli.js",
     "bench": "npm run build && node dist/bench.js",
-    "version": "node scripts/sync-producer.mjs && git add src/model/format.ts"
+    "version": "node scripts/sync-producer.mjs && git add src/core/model/format.ts manifest.json versions.json"
   },
   "devDependencies": {
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.38.6",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.20.2",
     "mocha": "^10.4.0",
+    "obsidian": "^1.13.1",
     "typescript": "^5.4.0"
   },
   "dependencies": {

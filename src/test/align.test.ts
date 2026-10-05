@@ -1,5 +1,5 @@
 import * as assert from "node:assert";
-import { normalizeWithMap, locate, locateQuote } from "../matching/align.js";
+import { normalizeWithMap, locate, locateQuote } from "../core/matching/align.js";
 
 describe("normalizeWithMap", () => {
   it("maps each normalized char back to its raw offset", () => {

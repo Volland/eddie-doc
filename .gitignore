@@ -3,8 +3,12 @@ dist/
 out/
 *.vsix
 sample/*.pdf
+# The two small fixtures the tests, the benchmark and CI read; the rest of sample/*.pdf is scratch.
+!sample/chapter-01.pdf
+!sample/chapter-01.annotated.pdf
 sample/*.review.json
 
 .omc/
 eddie-doc-*.vsix
 .DS_Store
+.mcp.json

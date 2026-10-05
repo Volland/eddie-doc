@@ -1,0 +1,334 @@
+/* Eddie Doc — review panel and editor markup.
+ * Everything uses Obsidian's own variables, so it follows the user's theme.
+ * Touch targets are 44px on mobile; the panel stacks list and thread on narrow screens. */
+
+/* -- panel ---------------------------------------------------------------- */
+
+.eddie-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  height: 100%;
+}
+
+.eddie-empty {
+  padding: var(--size-4-4);
+}
+
+.eddie-muted {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.eddie-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.eddie-title {
+  min-width: 0;
+}
+
+.eddie-doc {
+  font-weight: var(--font-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eddie-header-actions {
+  display: flex;
+  flex: none;
+  gap: var(--size-2-1);
+}
+
+.eddie-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.eddie-chip {
+  height: auto;
+  padding: var(--size-2-1) var(--size-4-2);
+  border-radius: var(--radius-l);
+  font-size: var(--font-ui-smaller);
+  box-shadow: none;
+  background: var(--background-modifier-hover);
+}
+
+.eddie-chip.is-off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.eddie-search {
+  flex: 1 1 8em;
+  min-width: 6em;
+}
+
+.eddie-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.eddie-list {
+  flex: 1 1 40%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.eddie-detail {
+  flex: 1 1 60%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--size-4-3);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.eddie-narrow .eddie-list,
+.eddie-narrow .eddie-detail {
+  flex: 1 1 auto;
+  border-top: none;
+}
+
+.eddie-group {
+  position: sticky;
+  top: 0;
+  padding: var(--size-2-2) var(--size-4-3);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eddie-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  min-height: 44px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.eddie-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.eddie-row.is-selected {
+  background: var(--background-modifier-active-hover);
+  box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.eddie-row.is-resolved .eddie-row-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.eddie-kind {
+  align-self: start;
+  padding: 0 var(--size-4-1);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.eddie-row-meta {
+  grid-column: 2;
+}
+
+.eddie-none {
+  padding: var(--size-4-4);
+}
+
+/* -- thread --------------------------------------------------------------- */
+
+.eddie-thread-label {
+  margin-bottom: var(--size-4-2);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.eddie-warn {
+  margin-bottom: var(--size-4-2);
+  padding: var(--size-4-2);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--color-orange) 15%, transparent);
+}
+
+.eddie-post {
+  margin-bottom: var(--size-4-3);
+  padding: var(--size-4-2) var(--size-4-3);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.eddie-post.eddie-root {
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.eddie-post-author {
+  margin-bottom: var(--size-2-2);
+  font-weight: var(--font-semibold);
+  font-size: var(--font-ui-small);
+}
+
+.eddie-post-body > :first-child { margin-top: 0; }
+.eddie-post-body > :last-child { margin-bottom: 0; }
+
+.eddie-reply-box {
+  width: 100%;
+  min-height: 4.5em;
+  resize: vertical;
+}
+
+.eddie-send {
+  margin-top: var(--size-4-2);
+}
+
+.eddie-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-3);
+}
+
+.eddie-actions.eddie-small {
+  margin-top: var(--size-2-2);
+}
+
+.eddie-actions.eddie-small button {
+  height: auto;
+  padding: 0 var(--size-4-2);
+  font-size: var(--font-ui-smaller);
+}
+
+.eddie-edit-label {
+  margin-top: var(--size-4-4);
+}
+
+.eddie-back {
+  margin-bottom: var(--size-4-3);
+}
+
+/* -- editor --------------------------------------------------------------- */
+
+.cm-line.eddie-line.eddie-open {
+  background: color-mix(in srgb, var(--color-yellow) 14%, transparent);
+}
+
+.cm-line.eddie-line.eddie-review {
+  background: color-mix(in srgb, var(--color-orange) 18%, transparent);
+}
+
+.cm-line.eddie-line.eddie-resolved {
+  background: color-mix(in srgb, var(--color-green) 8%, transparent);
+}
+
+.eddie-gutter {
+  min-width: 2.2em;
+}
+
+.eddie-badge {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--size-2-1);
+  border-radius: var(--radius-s);
+  background: var(--color-yellow);
+  color: var(--background-primary);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  line-height: 1.5;
+  text-align: center;
+  cursor: pointer;
+}
+
+.eddie-badge.eddie-review { background: var(--color-orange); }
+.eddie-badge.eddie-resolved { background: var(--color-green); opacity: 0.7; }
+
+.eddie-inline {
+  margin-left: var(--size-4-2);
+  color: var(--text-faint);
+  user-select: none;
+  pointer-events: none;
+}
+
+.eddie-hover {
+  max-width: 28em;
+  padding: var(--size-4-2);
+}
+
+.eddie-hover-row + .eddie-hover-row {
+  margin-top: var(--size-4-2);
+  padding-top: var(--size-4-2);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.eddie-hover-title { font-weight: var(--font-semibold); }
+.eddie-hover-body { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+
+/* AsciiDoc in the markdown editor: undo markdown's heading/emphasis styling, which
+ * would otherwise present `== Heading` and `*bold*` as if they were markdown. */
+.cm-content.eddie-adoc .cm-header,
+.cm-content.eddie-adoc .cm-strong,
+.cm-content.eddie-adoc .cm-em {
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+}
+
+/* -- modals --------------------------------------------------------------- */
+
+.eddie-modal-input { width: 100%; }
+.eddie-modal-detail { color: var(--text-muted); }
+.eddie-modal-pre {
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: var(--font-ui-smaller);
+}
+
+/* -- touch ---------------------------------------------------------------- */
+
+.is-mobile .eddie-panel button,
+.is-mobile .eddie-chip {
+  min-height: 44px;
+}
+
+.is-mobile .eddie-search {
+  min-height: 44px;
+}
+
+/* -- own PDF preview ------------------------------------------------------ */
+
+.eddie-pdfview { display: flex; flex-direction: column; padding: 0; height: 100%; }
+.eddie-pdfview-bar {
+  display: flex; align-items: center; gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.eddie-pdfview-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eddie-pdfview-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--background-secondary); }
+.eddie-pdfview-page { position: relative; margin: 0 auto; width: max-content; box-shadow: 0 0 0 1px var(--background-modifier-border); }
+.eddie-pdfview-page canvas { display: block; background: #fff; }
+.eddie-pdfview-mark {
+  position: absolute; pointer-events: none;
+  border: 2px solid var(--color-red);
+  background: color-mix(in srgb, var(--color-yellow) 30%, transparent);
+  border-radius: 2px;
+}
+
+.eddie-select { max-width: 9em; }

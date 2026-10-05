@@ -2,7 +2,8 @@ import * as assert from "node:assert";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { ReviewStore } from "../model/store.js";
+import { ReviewStore } from "../core/model/store.js";
+import { testHost } from "./testHost.js";
 
 /**
  * The multi-round workflow end to end, against the real sample PDF: map a round,
@@ -25,7 +26,7 @@ describe("review rounds, end to end", function () {
     fs.mkdirSync(path.join(root, "manuscript"), { recursive: true });
     adocPath = path.join(root, "manuscript", "chapter-01.adoc");
     fs.copyFileSync(SAMPLE_ADOC, adocPath);
-    store = new ReviewStore();
+    store = new ReviewStore(testHost().host);
     store.configure({ workspaceRoot: root, reviewFolder: ".eddie" });
   });
 
@@ -40,6 +41,7 @@ describe("review rounds, end to end", function () {
       revision: { id: "rev-1", ordinal: 1 },
       mapping: { origin: "Acme Editorial" },
     });
+    await store.flush(); // saves are queued; the files are what is under test
 
     assert.deepStrictEqual(fs.readdirSync(path.join(root, "manuscript")), [
       "chapter-01.adoc",
@@ -262,6 +264,7 @@ describe("review rounds, end to end", function () {
       revision: { id: "rev-1", ordinal: 1 },
     });
     const sidecar = store.get(adocPath)!.sidecarPath;
+    await store.flush();
     const written = fs.statSync(sidecar).mtimeMs;
     const stamp = store.get(adocPath)!.updatedAt;
 

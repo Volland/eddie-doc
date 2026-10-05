@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
-import { renderReport } from "../model/report.js";
-import type { ReviewItem, ReviewSession } from "../model/types.js";
+import { renderReport } from "../core/model/report.js";
+import type { ReviewItem, ReviewSession } from "../core/model/types.js";
 
 function item(id: string, over: Partial<ReviewItem>): ReviewItem {
   return {

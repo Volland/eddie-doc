@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
-import { charGrams, lexicalFallback } from "../matching/lexical.js";
-import type { ReviewItem } from "../model/types.js";
+import { charGrams, lexicalFallback } from "../core/matching/lexical.js";
+import type { ReviewItem } from "../core/model/types.js";
 
 const SOURCE = [
   "= Doc", // 0
