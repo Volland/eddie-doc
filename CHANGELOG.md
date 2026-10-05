@@ -5,6 +5,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-05
+
+Obsidian plugin: changes made after reading Obsidian's current plugin guidelines,
+before submitting to the community directory. No change to the review format or to
+VS Code behaviour.
+
+- Files in the vault are written through Obsidian's Vault API (`create`, `process`,
+  the file manager's trash) so other plugins and Sync see ordinary edits. The
+  Adapter API is kept only for what the index cannot see: dot-folders, files that
+  were just synced in, and directory listings.
+- Starting Obsidian no longer scans every file in the vault for legacy sidecars;
+  those are found when their manuscript is opened.
+- Removed an unnecessary console message.
+- Tested again in a real Obsidian: 65 of 65 checks on 1.8.4 and 1.13.7.
+
 ## [1.4.0] - 2026-10-05
 
 The first Obsidian release, published on GitHub (not the VS Code Marketplace).

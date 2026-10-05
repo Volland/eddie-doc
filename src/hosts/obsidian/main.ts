@@ -255,12 +255,6 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
       }
       this.heldByOthers.push(ext);
     }
-    if (this.heldByOthers.length && this.settings.claimAdoc === "auto") {
-      console.info(
-        `Eddie Doc: .${this.heldByOthers.join(", .")} is handled by another plugin; ` +
-          `attaching to its editor instead of opening files itself.`
-      );
-    }
   }
 
   /** Keep claimed `.adoc` files in source mode: markdown rendering of AsciiDoc is noise. */

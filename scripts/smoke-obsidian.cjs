@@ -46,15 +46,33 @@ const adapter = new Adapter();
 const handlers = {}; // vault event name -> callbacks, in registration order
 const registered = { commands: [], views: [], tabs: 0, extensions: [], events: [] };
 class TFile { constructor(p) { this.path = p; this.extension = p.split(".").pop(); this.name = p.split("/").pop(); this.stat = { mtime: 0 }; } }
+class TFolder { constructor(p) { this.path = p; this.name = p.split("/").pop(); } }
+class TAbstractFile {}
 const vaultFiles = () => [...adapter.files.keys()].map((p) => new TFile(p));
 
 const app = {
   vault: {
     adapter,
-    getAbstractFileByPath: () => null, // nothing is "indexed": exercises the adapter path
+    // The index follows the disk, as it does once Obsidian has caught up. Files in a
+    // dot-folder are never indexed (Obsidian skips them), so those use the adapter path.
+    getAbstractFileByPath: (p) => {
+      if (p.split("/").some((s) => s.startsWith("."))) return null;
+      if (adapter.files.has(p)) return new TFile(p);
+      if (p && adapter.dirs.has(p)) return new TFolder(p);
+      return null;
+    },
+    // Faithful errors: creating something that exists fails, as Obsidian's does.
+    create: async (p, t) => { if (adapter.files.has(p)) throw new Error("File already exists."); await adapter.write(p, t); return new TFile(p); },
+    createBinary: async (p, b) => { if (adapter.files.has(p)) throw new Error("File already exists."); await adapter.writeBinary(p, b); return new TFile(p); },
+    createFolder: async (p) => { if (adapter.dirs.has(p)) throw new Error("Folder already exists."); await adapter.mkdir(p); },
+    process: async (f, fn) => { const next = fn(await adapter.read(f.path)); await adapter.write(f.path, next); return next; },
+    modifyBinary: async (f, b) => adapter.writeBinary(f.path, b),
+    read: async (f) => adapter.read(f.path),
+    readBinary: async (f) => adapter.readBinary(f.path),
     getFiles: vaultFiles,
     on: (name, cb) => { (handlers[name] ||= []).push(cb); return {}; },
   },
+  fileManager: { trashFile: async (f) => adapter.remove(f.path) },
   workspace: {
     onLayoutReady: (cb) => cb(),
     on: (name) => { registered.events.push(name); return {}; },
@@ -87,7 +105,7 @@ const stub = {
   Plugin, ItemView: stubClass, Modal: stubClass, FuzzySuggestModal: stubClass, PluginSettingTab: stubClass,
   Setting: stubClass, Menu: stubClass, MarkdownView: stubClass, MarkdownRenderer: { render: async () => {} },
   Notice: class { constructor(m) { (stub.notices ||= []).push(m); } hide() {} },
-  TFile, Platform: { isMobile: false, isDesktopApp: true },
+  TFile, TFolder, TAbstractFile, Platform: { isMobile: false, isDesktopApp: true },
   normalizePath: (p) => p.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, ""),
   editorInfoField: { id: "info" },
   requestUrl: async () => ({ status: 200, json: {} }),

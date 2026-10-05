@@ -164,18 +164,14 @@ async function walk(plugin: EddiePlugin, dir: string, keep: (name: string) => bo
 }
 
 /**
- * Load every mapping the vault knows about: everything under the review folder,
- * plus legacy sidecars that sit beside their manuscript.
+ * Load every mapping under the review folder. A legacy sidecar beside its manuscript
+ * is not searched for here (that would walk the whole vault on every start); it is
+ * found when its manuscript is opened.
  */
 export async function loadReviewFolder(plugin: EddiePlugin): Promise<void> {
   const { storage } = plugin.host;
   const folder = plugin.settings.reviewFolder;
   const found = new Set<string>(await walk(plugin, folder, (n) => /\.review\.json$/i.test(n)));
-  for (const f of plugin.app.vault.getFiles()) {
-    if (/\.review\.json$/i.test(f.path) && !path.normalize(f.path).startsWith(path.normalize(folder) + "/")) {
-      found.add(f.path);
-    }
-  }
   for (const file of [...found].sort()) {
     if (plugin.store.getBySidecar(file)) continue;
     let adoc: string | undefined;

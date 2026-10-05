@@ -1,16 +1,25 @@
-import { TFile, normalizePath, type App } from "obsidian";
+import { TAbstractFile, TFile, normalizePath, type App } from "obsidian";
 import { dirname } from "../../core/util/path.js";
 import type { DirEntry, Storage } from "../../core/host/storage.js";
 
-// @lat: [[obsidian#Plugin shell#Storage on a vault]]
+/** True when any segment starts with a dot: Obsidian does not index those folders. */
+function isHidden(path: string): boolean {
+  return path.split("/").some((s) => s.startsWith("."));
+}
+
+/** Obsidian's "already exists" errors, which mean the file is on disk but not indexed yet. */
+function alreadyExists(e: unknown): boolean {
+  return /already exists/i.test(String(e));
+}
+
 /**
  * {@link Storage} over an Obsidian vault.
  *
- * Reads and writes go through `app.vault.adapter` — the one file API present on
- * desktop and mobile, and the only one that reaches folders Obsidian does not
- * index (a dot-folder review folder). A file Obsidian *has* indexed is modified
- * through the vault instead, so the metadata cache, other plugins and Sync all
- * see the change as an ordinary edit.
+ * The Vault API is used wherever Obsidian indexes the path, so the metadata cache,
+ * other plugins and Sync see an ordinary edit. The Adapter API is the fallback for what
+ * the index cannot see: a folder whose name starts with a dot (never indexed), a file
+ * Obsidian has not noticed yet (just synced in, or just written), and directory
+ * listings, which must reflect the disk rather than a cache that can lag behind it.
  *
  * Ids are vault-relative; there is no Node here, and no absolute path.
  */
@@ -21,8 +30,12 @@ export class ObsidianStorage implements Storage {
     return this.app.vault.adapter;
   }
 
+  private entry(path: string): TAbstractFile | null {
+    return this.app.vault.getAbstractFileByPath(path);
+  }
+
   private indexed(path: string): TFile | null {
-    const f = this.app.vault.getAbstractFileByPath(path);
+    const f = this.entry(path);
     return f instanceof TFile ? f : null;
   }
 
@@ -42,27 +55,52 @@ export class ObsidianStorage implements Storage {
   async writeText(path: string, text: string): Promise<void> {
     const p = normalizePath(path);
     const f = this.indexed(p);
-    if (f) return this.app.vault.modify(f, text);
+    if (f) {
+      await this.app.vault.process(f, () => text);
+      return;
+    }
     await this.mkdirp(dirname(p));
+    if (!isHidden(p)) {
+      try {
+        await this.app.vault.create(p, text);
+        return;
+      } catch (e) {
+        if (!alreadyExists(e)) throw e;
+        // On disk but not indexed yet (a sync just delivered it): overwrite it directly.
+      }
+    }
     await this.adapter.write(p, text);
   }
 
   async writeBytes(path: string, bytes: Uint8Array): Promise<void> {
     const p = normalizePath(path);
-    // The adapter wants an ArrayBuffer of exactly the bytes, not the backing store.
+    // The Vault API wants an ArrayBuffer of exactly the bytes, not the backing store.
     const buf = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength
     ) as ArrayBuffer;
     const f = this.indexed(p);
-    if (f) return this.app.vault.modifyBinary(f, buf);
+    if (f) {
+      await this.app.vault.modifyBinary(f, buf);
+      return;
+    }
     await this.mkdirp(dirname(p));
+    if (!isHidden(p)) {
+      try {
+        await this.app.vault.createBinary(p, buf);
+        return;
+      } catch (e) {
+        if (!alreadyExists(e)) throw e;
+      }
+    }
     await this.adapter.writeBinary(p, buf);
   }
 
   async exists(path: string): Promise<boolean> {
+    const p = normalizePath(path);
+    if (this.entry(p)) return true;
     try {
-      return await this.adapter.exists(normalizePath(path));
+      return await this.adapter.exists(p);
     } catch {
       return false;
     }
@@ -70,7 +108,11 @@ export class ObsidianStorage implements Storage {
 
   async remove(path: string): Promise<void> {
     const p = normalizePath(path);
-    if (await this.adapter.exists(p)) await this.adapter.remove(p);
+    const f = this.indexed(p);
+    // Through the file manager, so the user's "deleted files" preference (system
+    // trash, Obsidian's .trash, or permanent) decides what happens to it.
+    if (f) await this.app.fileManager.trashFile(f);
+    else if (await this.adapter.exists(p)) await this.adapter.remove(p);
   }
 
   async copy(from: string, to: string): Promise<void> {
@@ -93,8 +135,10 @@ export class ObsidianStorage implements Storage {
   }
 
   /**
-   * Create `dir` and its parents one segment at a time: a recursive `mkdir` is
-   * not guaranteed by every adapter (mobile's differs from desktop's).
+   * Create `dir` and its parents one segment at a time: a recursive mkdir is not
+   * guaranteed by every adapter (mobile's differs from desktop's). A folder Obsidian
+   * indexes is made through the Vault so it appears at once; a dot-folder, which it
+   * never indexes, through the Adapter.
    */
   private async mkdirp(dir: string): Promise<void> {
     if (!dir || dir === "." || dir === "/") return;
@@ -102,7 +146,16 @@ export class ObsidianStorage implements Storage {
     for (const seg of normalizePath(dir).split("/")) {
       if (!seg) continue;
       acc = acc ? `${acc}/${seg}` : seg;
-      if (!(await this.adapter.exists(acc))) await this.adapter.mkdir(acc);
+      if (this.entry(acc)) continue;
+      if (isHidden(acc)) {
+        if (!(await this.adapter.exists(acc))) await this.adapter.mkdir(acc);
+        continue;
+      }
+      try {
+        await this.app.vault.createFolder(acc);
+      } catch (e) {
+        if (!alreadyExists(e)) throw e;
+      }
     }
   }
 }

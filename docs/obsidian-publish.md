@@ -1,6 +1,6 @@
 # Publishing the Obsidian plugin
 
-What is ready, what is not, and the exact steps. Nothing here has been run: no release has been cut and no pull request has been opened.
+What is ready, what is not, and the exact steps. Releases `1.4.0-beta.1` and `1.4.0` have been cut; the community directory submission has not been made.
 
 ## Released: 1.4.0-beta.1 (2026-10-05)
 
@@ -11,7 +11,7 @@ A pre-release is on GitHub and installs through BRAT today.
 | Obsidian files (what BRAT and Obsidian read) | <https://github.com/Volland/eddie-doc/releases/tag/1.4.0-beta.1>: `main.js`, `manifest.json`, `styles.css` |
 | VS Code build and the same files | <https://github.com/Volland/eddie-doc/releases/tag/v1.4.0-beta.1>: the `.vsix` too. Not on the Marketplace |
 | Checked after publishing | CI and the release workflow passed on GitHub; the three downloaded files are byte-identical to the local build; `E2E_PLUGIN_DIR=<downloaded files> npm run e2e:obsidian` passes 65 of 65 on Obsidian 1.8.4 |
-| Not done | Phone testing; the community-list pull request; the VS Code Marketplace |
+| Not done | Measured phone testing; the community directory submission; the VS Code Marketplace |
 
 **Try it in Obsidian:** install the BRAT community plugin, then *BRAT → Add beta plugin* → `Volland/eddie-doc`, enable *Eddie Doc*. On a phone, do the same inside the mobile app, or copy the three files into `<vault>/.obsidian/plugins/eddie-doc/` through your sync. Then run *Eddie Doc: Open PDF review* on a PDF and `.adoc` in the vault.
 
@@ -64,26 +64,18 @@ If you would rather have only one tag style, switch the repository to tags witho
 
 Then, in Obsidian with BRAT installed: *BRAT → Add beta plugin* → `Volland/eddie-doc`. Check that the three files arrive in `<vault>/.obsidian/plugins/eddie-doc/` and the plugin enables.
 
-## 2. Submit to the community list
+## 2. Submit to the community directory
 
-Do this only after the gate above and at least one stable release (`1.4.0`, not a beta). The plugin must be installable from that release's three files.
+**Submission no longer goes through a pull request.** The official instructions (<https://docs.obsidian.md/Plugins/Releasing/Submit+your+plugin>) describe a web dashboard and do not mention a pull request to `obsidianmd/obsidian-releases`, and that repository's pull-request list is not available through the API. This guide was first written for the old pull-request flow and has been corrected; check the page above for any change before submitting.
 
-1. Fork `obsidianmd/obsidian-releases`.
-2. Append this entry to the end of `community-plugins.json`:
+Do this only after the gate above and at least one stable release (`1.4.0` or later, not a beta). Obsidian installs from the release whose tag equals the version in `manifest.json` (no `v`), so the plugin must be installable from that release's three files.
 
-   ```json
-   {
-     "id": "eddie-doc",
-     "name": "Eddie Doc",
-     "author": "Volodymyr Pavlyshyn",
-     "description": "Map an editor's PDF annotations back onto your AsciiDoc source as navigable, resolvable review items.",
-     "repo": "Volland/eddie-doc"
-   }
-   ```
+1. Check the repository has what the directory reads: `README.md`, `LICENSE`, and `manifest.json` (semantic version `x.y.z`, a release tagged with exactly that version carrying `main.js`, `manifest.json` and `styles.css`). All are in place for `1.4.0`.
+2. Sign in at <https://community.obsidian.md> with your Obsidian account and link your GitHub account to your profile. This needs you; it cannot be done on your behalf.
+3. Use **Add your plugin** and choose `Volland/eddie-doc`.
+4. The directory runs an automated review of `manifest.json` and the release. Fix anything it reports in the repository and publish a **new, higher version** (`./release.sh patch github`); do not edit a published release.
 
-   `id`, `name` and `description` must match `manifest.json` exactly.
-3. Open the pull request with the repository's template and tick its checklist honestly.
-4. An automated check validates the manifest and the latest release; a human review follows and can take weeks. Reply to requested changes by releasing a new version, not by editing the old one.
+The old entry format (`id`, `name`, `author`, `description`, `repo`) is now read from `manifest.json` and the repository rather than typed in.
 
 ### Requirements, and where Eddie Doc stands
 
@@ -121,7 +113,7 @@ The OpenSpec change `obsidian-plugin` was archived with 24 of its 80 tasks open 
 
 1. **Phone verification** (spike 1.1–1.8, QA 6.21). Desktop Obsidian is covered by `npm run e2e:obsidian`; what remains needs a phone and a real vault: build the 300-page fixture, run `docs/obsidian-qa.md` on iOS and Android, fill in the phone rows of `docs/obsidian-spike-results.md`. A person's pass through the checklist on desktop (looks, sync) is also still owed.
 2. **Run the VS Code manual checklist** (4.7). The refactor changed how the extension talks to its store; automated checks pass and the built extension activates under a stub, but it has not been used in VS Code since.
-3. **Cut a BRAT pre-release** (8.3), then the stable release and the community pull request (8.5).
+3. **Submit to the community directory** through the dashboard (section 2), then answer whatever its automated review reports.
 4. **Smaller, optional:** have the VS Code UI use `core/view` and `core/edits` instead of its own copies (2.17); split `extension.ts` into commands and flows (4.3); a VS Code host test (4.6); verify clean unload (6.20); spike-derived `Capabilities` flags (6.6).
 5. **The main specs are not written.** The delta specs were archived with the change, not merged into `openspec/specs/`, because merging would present unverified Obsidian behavior as established. After the QA pass, sync the requirements that held up.
 

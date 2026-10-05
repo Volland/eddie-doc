@@ -10,9 +10,9 @@ It waits for the workspace layout to be ready before claiming `.adoc`, so loadin
 
 ### Storage on a vault
 
-[[src/hosts/obsidian/storage.ts#ObsidianStorage]] reads and writes through the vault adapter, the one file API that exists on desktop and mobile, and modifies indexed files through the vault so other plugins and Sync see an ordinary edit.
+[[src/hosts/obsidian/storage.ts#ObsidianStorage]] uses the Vault API wherever Obsidian indexes the path, so the metadata cache, other plugins and Sync see an ordinary edit, and falls back to the Adapter API for what the index cannot see.
 
-It creates parent folders one segment at a time because a recursive mkdir is not guaranteed on every adapter. It uses no Node API.
+The fallback covers a dot-folder (never indexed), a file Obsidian has not noticed yet, and directory listings, which must reflect the disk. Creating something that is already on disk but not indexed is caught and written through the adapter. Deletion goes through the file manager, so the user's trash preference applies. Parent folders are created one segment at a time because a recursive mkdir is not guaranteed on every adapter. It uses no Node API.
 
 ### Settings
 
