@@ -13,6 +13,16 @@ tools other than the VS Code extension** (a CLI, CI gate, or a different editor)
 This document is the normative spec. The JSON Schema is authoritative for
 structure; where prose and schema disagree, the schema wins.
 
+## Hosts
+
+The format belongs to no editor. The VS Code extension, the Obsidian plugin and
+the command-line tool all read and write version 3, and a project opened in two
+of them sees one set of reviews. Where the files live is each host's default and
+a setting, never part of the format: `.eddie` for VS Code and the CLI, a visible
+`Eddie Reviews` folder in Obsidian (which does not index or sync dot-folders).
+Every path inside a sidecar is relative to the sidecar, so moving the folder
+does not break it.
+
 ## The unit: one file per mapping
 
 A manuscript is edited over several **revisions** (rounds), and a round can come

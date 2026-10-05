@@ -6,6 +6,40 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Obsidian plugin.** Eddie Doc now also runs in Obsidian, desktop and mobile,
+  from the same package and the same review format. A review panel replaces
+  VS Code's tree view, Problems panel, comment threads and code actions: grouped,
+  filterable annotations, the selected thread with replies and a resolve toggle,
+  and buttons for every action (confirm, re-link, re-map, apply the suggested
+  edit, preview the PDF). The editor gets line highlights, numbered gutter
+  badges, hover text and optional end-of-line markers, all display-only. 32
+  commands (offered only when they apply) cover the rest: rounds and mappings, anchors, report, stamp, extract.
+  Reviews live in a visible `Eddie Reviews` folder with the annotated PDFs
+  copied in, because Obsidian does not index or sync dot-folders and a PDF
+  outside the vault is unreadable on mobile. `.adoc` files open in the source
+  editor only if no other plugin has claimed them. See `docs/OBSIDIAN.md`.
+  **New. Tested in a running desktop Obsidian (1.8.4 and 1.13.7) by `npm run e2e:obsidian`
+  (65 checks, including pairing with AsciiDoc Live); not yet on a phone** — see the status notes
+  there and `docs/obsidian-qa.md`. Also: sidecars changed by another device or
+  sync client are re-read and merged rather than overwritten (the other copy is
+  kept beside it); renaming a manuscript, PDF, review folder or sidecar keeps the
+  review attached; mapping, stamping and extraction show per-page progress, free
+  each page as they go and can be cancelled; an optional built-in PDF viewer
+  draws the page and the marked rectangle itself; panel filters (including kind
+  and page) are remembered; right-click entries on annotated lines, PDFs and
+  mapped `.adoc` files.
+
+### Changed (internal)
+- **Host-neutral core.** All review logic moved to `src/core/` and runs
+  unchanged in VS Code, Obsidian and the CLI behind a small set of ports
+  (storage, host services, PDF engine). `ReviewStore` is now host-neutral:
+  file reads are async, and saves are queued, coalesced and serialized instead
+  of written synchronously on every change — `await store.flush()` when the file
+  must be on disk. A synchronous pure-TypeScript SHA-256 replaces `node:crypto`.
+  `npm run check:core` fails the build if the core imports `vscode`, `obsidian`
+  or a Node builtin. No change to the sidecar format or to VS Code behavior is
+  intended; see `docs/adr/0001-*.md`.
+
 - **Add PDFs to an existing mapping.** *Add PDFs to This Mapping…* (view menu,
   a mapping's context menu, or *Open PDF Review* on a document with history)
   appends one or more PDFs' marks to a mapping's list. A mark the mapping

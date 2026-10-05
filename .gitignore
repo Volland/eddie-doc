@@ -12,3 +12,4 @@ sample/*.review.json
 eddie-doc-*.vsix
 .DS_Store
 .mcp.json
+lat.md/.cache/

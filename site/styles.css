@@ -157,3 +157,7 @@ footer .spacer { flex: 1; }
 
 .muted { color: var(--fg-soft); }
 .pill { display: inline-block; font-family: var(--mono); font-size: .8rem; background: var(--bg-code); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+
+/* h4 question headings in the support FAQ, and paragraph spacing inside cards */
+h4 { margin: 22px 0 6px; font-size: 1rem; }
+.card p + p { margin-top: 10px; }

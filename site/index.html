@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Eddie Doc — AsciiDoc PDF Review</title>
-<meta name="description" content="Eddie Doc reads an editor's annotated PDF and maps every highlight, strikethrough, and comment back to the exact line in your AsciiDoc source — as navigable, resolvable review items in VS Code.">
+<meta name="description" content="Eddie Doc reads an editor's annotated PDF and maps every highlight, strikethrough, and comment back to the exact line in your AsciiDoc source — as navigable, resolvable review items in VS Code and Obsidian.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -25,6 +25,7 @@
       Eddie Doc
     </a>
     <span class="spacer"></span>
+    <a class="link" href="index.html#install">Install</a>
     <a class="link" href="index.html#features">Features</a>
     <a class="link" href="index.html#how">How it works</a>
     <a class="link" href="format.html">Review Format</a>
@@ -50,7 +51,7 @@
         </g>
       </svg>
     </div>
-    <span class="tag">VS Code Extension</span>
+    <span class="tag">VS Code extension &middot; Obsidian plugin</span>
     <h1>Turn an editor's annotated PDF back into source edits.</h1>
     <p class="lead">
       You write in AsciiDoc, ship a PDF, and get it back covered in highlights,
@@ -60,6 +61,7 @@
     </p>
     <div class="cta">
       <a class="btn primary" href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">Install from Marketplace</a>
+      <a class="btn" href="#obsidian">Obsidian plugin</a>
       <a class="btn" href="format.html">Read the Review Format →</a>
     </div>
   </div>
@@ -82,6 +84,30 @@
         <b>Highlight</b> → <i>“Strong framing — keep this.”</i> mapped to line&nbsp;7 ·
         <b>Delete</b> → <i>“Too advanced for an intro.”</i> mapped to line&nbsp;11 ·
         character-precise so only the struck words are removed.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Works in</h2>
+    <p class="sub">Two places, one shared core and one review format.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">▣</span> VS Code</h3>
+        <p>Released. Activity-bar tree, inline decorations, Problems panel, comment threads and lightbulb quick-fixes.</p>
+        <p><a href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">Install from the Marketplace</a></p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">◇</span> Obsidian</h3>
+        <p>New; the first release is pending and the plugin has not yet been tested on real devices. A review panel, editor markup, and mobile support through the same code.</p>
+        <p><a href="#obsidian">Install steps</a> &middot; <a href="https://github.com/Volland/eddie-doc/blob/main/docs/OBSIDIAN.md">User guide</a></p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">›_</span> Command line</h3>
+        <p>Extract, map, report, stamp and strip anchors without an editor. It reads and writes the same review files.</p>
+        <p><a href="https://github.com/Volland/eddie-doc#readme">See the README</a></p>
       </div>
     </div>
   </div>
@@ -114,8 +140,43 @@
       </div>
       <div class="card">
         <h3><span class="ic">⤓</span> Tracks</h3>
-        <p>Resolution state and manual re-links persist in a diffable sidecar, <code>&lt;file&gt;.review.json</code>, next to your <code>.adoc</code> — preserved across re-maps.</p>
+        <p>Resolution state, replies and manual re-links persist in a diffable <code>.review.json</code> sidecar — preserved across re-maps and across rounds.</p>
       </div>
+      <div class="card">
+        <h3><span class="ic">◐</span> Handles rounds</h3>
+        <p>Several rounds, each with several annotated PDFs from different editors. Resolved state carries forward; mappings can be merged or extended with more PDFs.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">◇</span> On mobile</h3>
+        <p>In Obsidian the same code is meant to run on phones and tablets, with the PDF kept in the vault. Checked on desktop Obsidian; not yet on a phone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="obsidian">
+  <div class="wrap">
+    <h2>Eddie Doc for Obsidian</h2>
+    <p class="sub">Review an editor's PDF against your AsciiDoc source, inside your vault.</p>
+    <p>
+      The plugin gives you a review panel (Open, Needs review, Unmatched, Resolved)
+      with threaded replies, resolve, and buttons that apply a struck-out deletion or
+      a replacement to the source. In the editor it adds line highlights, gutter
+      number badges and hover text, display only and never written to your file. It
+      does not render AsciiDoc; use another plugin for a preview.
+    </p>
+    <p>
+      <b>Status:</b> new. The first Obsidian release has not been published, and
+      it has been tested in a running Obsidian on macOS (1.8.4 and 1.13.7) but not yet
+      on iOS or Android. It is not in the community plugin list.
+    </p>
+    <ol class="steps">
+      <li>Once the first release is published, download <code>main.js</code>, <code>manifest.json</code> and <code>styles.css</code> into <code>&lt;vault&gt;/.obsidian/plugins/eddie-doc/</code> and enable the plugin, or add <code>Volland/eddie-doc</code> in the BRAT plugin.</li>
+      <li>Put the <code>.adoc</code> and the annotated PDF in the vault.</li>
+      <li>Run <b>Eddie Doc: Open PDF review</b> and work through the panel.</li>
+    </ol>
+    <div class="cta" style="margin-top:20px">
+      <a class="btn primary" href="https://github.com/Volland/eddie-doc/blob/main/docs/OBSIDIAN.md">Obsidian user guide →</a>
     </div>
   </div>
 </section>
@@ -150,10 +211,10 @@
     <h2>An open, portable artifact</h2>
     <p class="sub">The review lives in a committable, tool-agnostic sidecar — not locked inside the editor.</p>
     <p>
-      Every review is stored as <code>&lt;file&gt;.review.json</code> in the
+      Every mapping is stored as a <code>.review.json</code> file in the
       <strong>Eddie Doc Review Format</strong>: a versioned, schema-validated
-      standard with relative paths and content hashes, so it travels with your repo
-      and can be read by a CLI, a CI gate, or another editor.
+      standard with relative paths and content hashes, so it travels with your repo or vault
+      and can be read by the VS Code extension, the Obsidian plugin, the CLI, a CI gate, or another editor.
     </p>
     <div class="cta" style="margin-top:20px">
       <a class="btn primary" href="format.html">Review Format spec →</a>

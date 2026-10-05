@@ -57,7 +57,7 @@
     <div class="grid">
       <div class="card">
         <h3><span class="ic">◈</span> Bug reports</h3>
-        <p>Open a <a href="https://github.com/Volland/eddie-doc/issues/new?labels=bug&amp;title=%5BBug%5D%20">GitHub issue</a>. Include your VS&nbsp;Code version, the extension version, and — if you can — a small <code>.adoc</code> + annotated PDF that reproduces it.</p>
+        <p>Open a <a href="https://github.com/Volland/eddie-doc/issues/new?labels=bug&amp;title=%5BBug%5D%20">GitHub issue</a>. Include your VS&nbsp;Code or Obsidian version, the extension or plugin version, your platform (desktop, iOS, Android), and — if you can — a small <code>.adoc</code> + annotated PDF that reproduces it.</p>
       </div>
       <div class="card">
         <h3><span class="ic">✦</span> Feature requests</h3>
@@ -65,7 +65,7 @@
       </div>
       <div class="card">
         <h3><span class="ic">▤</span> Questions &amp; docs</h3>
-        <p>Check the <a href="format.html">Review Format spec</a> and the <a href="https://github.com/Volland/eddie-doc#readme">README</a> first. Still stuck? Open a <a href="https://github.com/Volland/eddie-doc/issues">question issue</a>.</p>
+        <p>Check the <a href="format.html">Review Format spec</a>, the <a href="https://github.com/Volland/eddie-doc#readme">README</a> and the <a href="https://github.com/Volland/eddie-doc/blob/main/docs/OBSIDIAN.md">Obsidian guide</a> first. Still stuck? Open a <a href="https://github.com/Volland/eddie-doc/issues">question issue</a>.</p>
       </div>
     </div>
   </div>
@@ -76,7 +76,7 @@
     <h2>Before you file a bug</h2>
     <p class="sub">A good report gets a fast fix. Please include:</p>
     <ol class="steps">
-      <li>The <b>extension version</b> (Extensions view → Eddie Doc) and your <b>VS&nbsp;Code version</b> (<em>Help → About</em>).</li>
+      <li>The <b>extension or plugin version</b> (VS&nbsp;Code: Extensions view; Obsidian: Settings → Community plugins) and your <b>VS&nbsp;Code</b> or <b>Obsidian</b> version, plus the platform if you are on mobile.</li>
       <li>What you did, what you expected, and what happened instead.</li>
       <li>If mapping is wrong: a minimal <code>.adoc</code> and the annotated PDF, or the relevant slice of the <code>&lt;file&gt;.review.json</code> sidecar.</li>
       <li>Any errors from <em>Help → Toggle Developer Tools → Console</em>.</li>
@@ -96,7 +96,7 @@
     </p>
     <ul>
       <li>Put your cursor on the right line and run <b>Eddie Doc: Re-link to Current Cursor Line</b>, or use the <b>Triage</b> button on the <em>Unmatched</em> group to clear them in one pass.</li>
-      <li>Lower <code>eddieDoc.matchThreshold</code> (default <code>0.55</code>) if many correct matches are being rejected.</li>
+      <li>Lower <code>eddieDoc.matchThreshold</code> (VS&nbsp;Code) or <em>Match threshold</em> (Obsidian) (default <code>0.5</code>) if many correct matches are being rejected.</li>
       <li>If the source and PDF have diverged a lot, enable the semantic fallback (below).</li>
     </ul>
 
@@ -133,6 +133,48 @@
       diffable record — commit it to keep review history.
     </p>
 
+    <h3 id="obsidian">Eddie Doc for Obsidian</h3>
+    <p>
+      The Obsidian plugin is new and has not yet been tested on real devices; the
+      first release is pending. The
+      <a href="https://github.com/Volland/eddie-doc/blob/main/docs/OBSIDIAN.md">user guide</a> has the full troubleshooting list. Common questions:
+    </p>
+
+    <h4>Does it work on mobile?</h4>
+    <p>
+      It is built to: the plugin is not desktop-only and uses the same code on
+      phones. It has been tested on desktop Obsidian, not yet on a phone, and PDF parsing
+      on a phone, especially of a large PDF, may be slow. The PDF must be inside the vault. Choosing a file from
+      disk and the optional Ollama fallback are desktop only.
+    </p>
+
+    <h4>How does it handle <code>.adoc</code> files?</h4>
+    <p>
+      If no other plugin handles <code>.adoc</code> or <code>.asciidoc</code>, Eddie
+      opens them in the source editor. If another AsciiDoc plugin does, Eddie leaves
+      the extension alone and, when it needs to show the source, opens it in
+      Obsidian's built-in editor in its own tab, beside that plugin's view. The setting <em>Open .adoc files with Eddie</em> (Auto or
+      Never) controls this; reload the plugin after changing it. Eddie does not
+      render AsciiDoc.
+    </p>
+
+    <h4>Where are my reviews stored?</h4>
+    <p>
+      In <code>Eddie Reviews/</code> at the root of the vault, as
+      <code>Eddie Reviews/&lt;manuscript path&gt;/&lt;doc&gt;/rev-N/&lt;mapping&gt;.review.json</code>.
+      The folder is visible on purpose, because Obsidian does not index or sync
+      folders that start with a dot. Annotated PDFs are copied into it.
+    </p>
+
+    <h4>How do I sync them, and can I use them in VS Code?</h4>
+    <p>
+      The review folder is an ordinary folder, so your usual sync or git setup
+      handles it. The plugin does not reload a sidecar changed on another device
+      while it is running; reload the plugin after a sync, and avoid editing the
+      same round on two devices at once. The files are the same format as the VS
+      Code extension and CLI write (<a href="format.html">Review Format</a>).
+    </p>
+
     <h3>The sidecar looks different after this version</h3>
     <p>
       Eddie Doc migrated it to <a href="format.html">Review Format v2</a>
@@ -166,6 +208,7 @@
       <a class="btn" href="https://github.com/Volland/eddie-doc/blob/main/CHANGELOG.md">Changelog</a>
       <a class="btn" href="format.html">Review Format</a>
       <a class="btn" href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">Marketplace</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/blob/main/docs/OBSIDIAN.md">Obsidian guide</a>
       <a class="btn" href="https://docs.google.com/forms/d/1zQy3r-zHAQTmeQBueK37tWnyrzWk8j92IAefOiLAaCk/viewform">User survey</a>
     </div>
   </div>

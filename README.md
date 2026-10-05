@@ -7,7 +7,53 @@ by hand is slow and error-prone.
 
 **Eddie Doc** reads the annotated PDF, recovers the text under each annotation,
 and maps every mark back to the exact line in your `.adoc` source. Annotations
-become navigable, resolvable review items right in the editor.
+become navigable, resolvable review items right where you write.
+
+## Where it runs
+
+Eddie Doc is available in two places, plus a command-line tool. They share one
+core and one on-disk review format, so a review started in one can be continued
+in another.
+
+| | VS Code extension | Obsidian plugin |
+| --- | --- | --- |
+| Status | Released ([Marketplace](https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc)) | New; first release pending. Tested on desktop Obsidian, not yet on a phone |
+| Where marks show | Activity-bar tree, inline decorations, Problems panel, gutter threads | One review panel, line highlights, gutter badges, hover |
+| Acting on a mark | Lightbulb quick fixes | "Apply to the source" buttons in the panel |
+| Default review folder | `.eddie` | `Eddie Reviews` (visible, so it syncs) |
+| Mobile | No | Yes, same code (emulated, not yet run on a phone) |
+| Semantic fallback (Ollama) | Yes | Desktop only |
+| Review format | v3 sidecar | v3 sidecar, the same files |
+
+- **Obsidian plugin:** see [docs/OBSIDIAN.md](docs/OBSIDIAN.md).
+- **VS Code extension:** the rest of this README.
+- **Command line:** extraction, mapping, reports, stamping and anchor removal
+  without an editor; see the [Development](#development) section.
+- **Website:** <https://volland.github.io/eddie-doc/>.
+
+The review file both hosts write is described in the
+[review sidecar](#the-review-sidecar-reviewjson) section and in
+[docs/FORMAT.md](docs/FORMAT.md).
+
+### Privacy, network use and file access
+
+Everything runs locally. Eddie Doc has no telemetry, no analytics, no accounts and
+no ads, and loads no remote code.
+
+- **Network:** only the optional semantic-matching fallback, off by default and
+  unavailable on mobile. When enabled, it sends source paragraphs and annotation
+  text to the Ollama URL you set (by default `http://localhost:11434`, your own
+  machine) to compute embeddings, and to no other address.
+- **Files:** it reads your `.adoc` and PDFs and writes its review files inside
+  the workspace or vault. In Obsidian it writes only to the review folder and to
+  a manuscript it was asked to anchor or edit; copying a PDF in from outside the
+  vault happens only through a file picker you operate, on desktop.
+- **Your text:** `// eddie:<id>` anchor comments are added to the `.adoc` when a
+  PDF is mapped (setting *Anchor annotations when mapping*). They never render and
+  *Remove source anchors* takes them out. Suggested edits are applied only when
+  you press the button, as one undoable change.
+
+# Eddie Doc for VS Code
 
 ## What it does
 
