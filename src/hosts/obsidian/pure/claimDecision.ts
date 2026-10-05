@@ -4,18 +4,18 @@
  * Obsidian lets one view type own a file extension. Eddie claims `adoc` onto the
  * built-in markdown view only when nothing else has, so it never takes the file
  * away from an AsciiDoc plugin the user installed. `holder` is whatever the view
- * registry reports; `"unknown"` means its shape was not recognised (the registry
+ * registry reports; `null` means its shape was not recognised (the registry
  * is undocumented) and is treated as "someone has it" — wrongly claiming would
  * break another plugin, wrongly abstaining only costs the standalone editor.
  */
-export type Holder = string | undefined | "unknown";
+export type Holder = string | undefined | null;
 
 export type ClaimDecision = "claim" | "skip-held" | "skip-unknown" | "skip-setting";
 
 // @lat: [[obsidian#AsciiDoc files]]
 export function decideClaim(holder: Holder, setting: "auto" | "never"): ClaimDecision {
   if (setting === "never") return "skip-setting";
-  if (holder === "unknown") return "skip-unknown";
+  if (holder === null) return "skip-unknown";
   if (holder !== undefined) return "skip-held";
   return "claim";
 }

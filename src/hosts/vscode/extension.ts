@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { setUiScheduler } from "../../core/host/progress.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -141,6 +142,7 @@ let activeStore: ReviewStore | undefined;
 declare const __dirname: string;
 
 export function activate(context: vscode.ExtensionContext): void {
+  setUiScheduler((run) => void setTimeout(run, 0)); // a macrotask, so the host's I/O interleaves
   // esbuild copies pdf.worker.mjs next to the bundle; pdfjs needs to be told.
   useNodePdfEngine(path.join(__dirname, "pdf.worker.mjs"));
   const store = new ReviewStore(createVscodeHost(authorName));
@@ -1084,7 +1086,7 @@ async function appendPdfs(
       title: `Eddie Doc: adding marks to ${mappingLabel(session)}…`,
     },
     async () => {
-      for (const pdf of pdfPaths!) {
+      for (const pdf of pdfPaths) {
         try {
           const res = await store.appendPdf(session.sidecarPath, pdf, {
             threshold: threshold(),
@@ -2556,7 +2558,7 @@ function resolveItemRef(store: ReviewStore, arg: unknown): ItemRef | undefined {
     typeof arg === "string"
       ? arg
       : Array.isArray(arg) && typeof arg[0] === "string"
-        ? (arg[0] as string)
+        ? (arg[0])
         : undefined;
   if (!id) return undefined;
   // Find which mapping owns this id. Annotation ids repeat across rounds, so

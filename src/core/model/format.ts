@@ -521,7 +521,7 @@ export function toDocument(
       anchor: cleanAnchor(it.anchor),
       match,
       state,
-    }) as ItemDoc;
+    });
   });
 
   return cleanUndefined({
@@ -537,7 +537,7 @@ export function toDocument(
     pdfs,
     artifacts,
     items,
-  }) as ReviewDocumentV3;
+  });
 }
 
 /** Serialize a session to the pretty-printed JSON written to the sidecar. */
@@ -611,7 +611,7 @@ function itemsFromDoc(doc: {
   return (doc.items ?? []).map((d) => {
     const a = d.annotation ?? ({} as AnnotationDoc);
     const g = a.geometry ?? ({} as GeometryDoc);
-    const s = d.state ?? ({ resolved: false } as StateDoc);
+    const s = d.state ?? ({ resolved: false });
     return cleanUndefined({
       id: d.id,
       kind: a.kind ?? "other",

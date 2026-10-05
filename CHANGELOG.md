@@ -5,6 +5,22 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-10-05
+
+Obsidian plugin, fixes from the community directory's lint review of 1.4.3:
+
+- The bundle no longer contains `new Function`: the build points pdfjs's two uses (an
+  eval probe and PostScript function compiling) at a stub that throws, so pdfjs reports
+  "no eval" and takes its interpreter path. Output is unchanged.
+- Timers go through `window.setTimeout` (popout-window safe); `globalThis` uses became
+  `window`/`self`; elements are created with `createEl`/`createSpan`/`createDiv`.
+- The core no longer calls the global `fetch`: the host supplies the transport, and the
+  semantic fallback reports an unreachable backend when it has none.
+- `onunload` is synchronous, the embed cache sits under `vault.configDir`, the claim
+  decision uses `null` instead of an `"unknown"` string, and a list of smaller lint fixes
+  (unnecessary escapes and assertions, deprecated `substr`/`setDynamicTooltip`, unused imports).
+- Layout uses `gap` instead of `column-gap`, which Obsidian 1.6 flags as partial support.
+
 ## [1.4.3] - 2026-10-05
 
 Obsidian plugin, fixes from the community directory's code review:

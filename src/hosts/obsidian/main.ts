@@ -79,8 +79,8 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
   private editorExtensions: Extension[] = [];
   private readonly attached = new WeakSet<EditorView>();
   private readonly foreignSlot = new Compartment();
-  private liveTimer: ReturnType<typeof setTimeout> | undefined;
-  private readonly remapTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private liveTimer: number | undefined;
+  private readonly remapTimers = new Map<string, number>();
   private statusEl: HTMLElement | undefined;
 
   async onload(): Promise<void> {
@@ -96,7 +96,7 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
     );
     this.store = new ReviewStore(this.host);
     this.store.configure({ workspaceRoot: "", reviewFolder: this.settings.reviewFolder });
-    this.store.useEmbedCacheFile(`${this.manifest.dir ?? ".obsidian/plugins/eddie-doc"}/embed-cache.json`);
+    this.store.useEmbedCacheFile(`${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/eddie-doc`}/embed-cache.json`);
 
     this.registerView(REVIEW_VIEW_TYPE, (leaf) => new ReviewView(leaf, this));
     this.registerView(PDF_PREVIEW_VIEW_TYPE, (leaf) => new PdfPreviewView(leaf, this));
@@ -189,13 +189,13 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
     this.app.workspace.onLayoutReady(() => void this.afterLayout());
   }
 
-  async onunload(): Promise<void> {
-    for (const t of this.remapTimers.values()) clearTimeout(t);
-    for (const t of this.sidecarTimers.values()) clearTimeout(t);
+  onunload(): void {
+    for (const t of this.remapTimers.values()) window.clearTimeout(t);
+    for (const t of this.sidecarTimers.values()) window.clearTimeout(t);
     this.currentOp?.abort();
-    if (this.liveTimer) clearTimeout(this.liveTimer);
-    await this.store?.flush();
-    this.store?.dispose();
+    if (this.liveTimer) window.clearTimeout(this.liveTimer);
+    // Obsidian does not wait for unload; let queued sidecar writes land, then release.
+    void this.store?.flush().then(() => this.store?.dispose());
   }
 
   /** Runs once every plugin has loaded, so claiming `.adoc` cannot steal from a later one. */
@@ -230,14 +230,14 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
   private holderOf(ext: string): Holder {
     try {
       const reg = (this.app as unknown as { viewRegistry?: Record<string, unknown> }).viewRegistry;
-      if (!reg) return "unknown";
+      if (!reg) return null;
       const map = reg.typeByExtension as Record<string, string> | undefined;
       if (map && typeof map === "object") return map[ext];
       const get = reg.getTypeByExtension as ((e: string) => string | undefined) | undefined;
       if (typeof get === "function") return get.call(reg, ext);
-      return "unknown";
+      return null;
     } catch {
-      return "unknown";
+      return null;
     }
   }
 
@@ -365,8 +365,8 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
   }
 
   scheduleRefresh(): void {
-    if (this.liveTimer) clearTimeout(this.liveTimer);
-    this.liveTimer = setTimeout(() => {
+    if (this.liveTimer) window.clearTimeout(this.liveTimer);
+    this.liveTimer = window.setTimeout(() => {
       this.liveTimer = undefined;
       this.refreshAll();
     }, LIVE_QUIET_MS);
@@ -375,25 +375,25 @@ export default class EddiePlugin extends Plugin implements EditorBridge {
   /** Re-map once the author stops typing, and only if the text actually moved. */
   private scheduleRemap(path: string): void {
     const pending = this.remapTimers.get(path);
-    if (pending) clearTimeout(pending);
+    if (pending) window.clearTimeout(pending);
     this.remapTimers.set(
       path,
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.remapTimers.delete(path);
         void this.store.remapAll(path, this.settings.matchThreshold, { onlyIfSourceChanged: true });
       }, REMAP_QUIET_MS)
     );
   }
 
-  private readonly sidecarTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly sidecarTimers = new Map<string, number>();
 
   /** A sidecar changed, appeared or vanished: re-read it once the writes settle. */
   private scheduleSidecarSync(path: string): void {
     const t = this.sidecarTimers.get(path);
-    if (t) clearTimeout(t);
+    if (t) window.clearTimeout(t);
     this.sidecarTimers.set(
       path,
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.sidecarTimers.delete(path);
         void this.store.reloadFromDisk(path).catch((e) => console.warn("Eddie Doc: could not re-read", path, e));
       }, 400)

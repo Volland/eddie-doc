@@ -28,9 +28,21 @@ export function throwIfCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) throw new CancelledError();
 }
 
+const microtask = (run: () => void): void => void Promise.resolve().then(run);
+let schedule: (run: () => void) => void = microtask;
+
+/**
+ * Choose how {@link yieldToUi} hands control back. The default is a microtask, which
+ * keeps the core free of timer globals; a host with a UI thread to protect installs a
+ * macrotask scheduler (a zero-delay timer) so rendering can interleave.
+ */
+export function setUiScheduler(fn?: (run: () => void) => void): void {
+  schedule = fn ?? microtask;
+}
+
 /** Let the event loop (and so the UI) run. */
 export function yieldToUi(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => schedule(resolve));
 }
 
 /**

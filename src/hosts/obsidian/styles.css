@@ -116,7 +116,7 @@
 .eddie-row {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: var(--size-4-2);
+  gap: 0 var(--size-4-2);
   padding: var(--size-4-2) var(--size-4-3);
   min-height: 44px;
   cursor: pointer;

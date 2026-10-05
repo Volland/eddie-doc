@@ -36,7 +36,7 @@ export function registerCommands(plugin: EddiePlugin): void {
   const add = (
     id: string,
     name: string,
-    run: () => unknown | Promise<unknown>,
+    run: () => unknown,
     when?: () => boolean
   ) =>
     plugin.addCommand({

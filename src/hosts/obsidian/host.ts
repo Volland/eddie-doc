@@ -30,7 +30,7 @@ const requestFetch: FetchLike = async (url, init) => {
   return {
     ok: res.status >= 200 && res.status < 300,
     status: res.status,
-    json: async () => res.json,
+    json: (): Promise<unknown> => Promise.resolve(res.json as unknown),
   };
 };
 

@@ -34,7 +34,7 @@ export function initialsOf(name: string | undefined): string | undefined {
   if (comma) text = `${comma[2]} ${comma[1]}`;
   const words = text
     .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
-    .split(/[\s._\-]+/)
+    .split(/[\s._-]+/)
     .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ""))
     .filter((w) => /^\p{L}/u.test(w));
   if (!words.length) return undefined;

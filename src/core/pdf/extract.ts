@@ -388,7 +388,7 @@ async function gatherPages(
     const texts: PositionedText[] = [];
     for (const it of content.items) {
       if (!("str" in it) || !it.str.trim()) continue;
-      const box = itemBox(it as TextItem);
+      const box = itemBox(it);
       if (box) texts.push({ str: it.str, box });
     }
     const view = page.view; // [x0, y0, x1, y1] in points

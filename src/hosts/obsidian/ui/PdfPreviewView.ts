@@ -106,7 +106,7 @@ export class PdfPreviewView extends ItemView {
       const fit = Math.min(width / base.width, Platform.isMobile ? 2 : 3);
       const viewport = page.getViewport({ scale: fit * dpr });
 
-      const canvas = activeDocument.createElement("canvas");
+      const canvas = createEl("canvas");
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
       canvas.setCssStyles({ width: `${viewport.width / dpr}px`, height: `${viewport.height / dpr}px` });

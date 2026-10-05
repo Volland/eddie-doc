@@ -9,7 +9,6 @@ import {
   groupItems,
   isLocated,
   itemTitle,
-  type Bucket,
 } from "../../../core/view/annotationView.js";
 import { availableActions } from "../../../core/edits/plan.js";
 import { rootMarkdown, threadLabel } from "../../../core/thread/threadModel.js";
@@ -244,7 +243,7 @@ export class ReviewView extends ItemView {
     const shown = applyFilter(
       items,
       {
-        buckets: BUCKET_ORDER.filter((b) => !hidden.has(b as Bucket)),
+        buckets: BUCKET_ORDER.filter((b) => !hidden.has(b)),
         text: panel.text,
         kinds: panel.kind ? [panel.kind as AnnotationKind] : undefined,
         page: panel.page ? Number(panel.page) : undefined,

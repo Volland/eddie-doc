@@ -6,7 +6,7 @@
  * global to decide whether to use a worker of its own, so leaving ours behind makes the
  * built-in viewer run OUR pdf.js worker code. This records what the global was before.
  */
-const g = globalThis as { pdfjsWorker?: unknown };
+const g = window as unknown as { pdfjsWorker?: unknown };
 
 export const savedPdfjsWorker = {
   had: Object.prototype.hasOwnProperty.call(g, "pdfjsWorker"),

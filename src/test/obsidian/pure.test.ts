@@ -33,10 +33,10 @@ describe("obsidian host: claiming .adoc", () => {
     assert.strictEqual(decideClaim(undefined, "auto"), "claim");
     assert.strictEqual(decideClaim("asciidoc-live-view", "auto"), "skip-held");
     assert.strictEqual(decideClaim("markdown", "auto"), "skip-held");
-    assert.strictEqual(decideClaim("unknown", "auto"), "skip-unknown");
+    assert.strictEqual(decideClaim(null, "auto"), "skip-unknown");
     assert.strictEqual(decideClaim(undefined, "never"), "skip-setting");
     assert.strictEqual(decideClaim("x", "never"), "skip-setting");
-    assert.strictEqual(decideClaim("unknown", "never"), "skip-setting");
+    assert.strictEqual(decideClaim(null, "never"), "skip-setting");
   });
 });
 

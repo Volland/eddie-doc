@@ -71,6 +71,28 @@ const STDOUT_GUARD = `
  *    it is built as a classic script and embedded in `main.js` as a string.
  *  - no Node builtin may survive in the output; the build fails if one does.
  */
+/**
+ * pdfjs probes `new Function("")` to learn whether eval works, and uses it to compile
+ * PostScript functions. Obsidian's review forbids dynamic code, so both uses are
+ * pointed at a stub that throws: the probe then reports "no eval" and pdfjs takes its
+ * interpreter path (the output is identical, only slower for rare PostScript shading).
+ */
+const noDynamicCode = {
+  name: "no-dynamic-code",
+  setup(b) {
+    b.onLoad({ filter: /pdfjs-dist[\\/].*\.mjs$/ }, (a) => {
+      const src = fs.readFileSync(a.path, "utf8");
+      if (!src.includes("new Function(")) return undefined;
+      return {
+        contents:
+          src.replace(/new Function\(/g, "pdfjsNoDynamicCode(") +
+          '\nfunction pdfjsNoDynamicCode() { throw new Error("dynamic code is disabled"); }\n',
+        loader: "js",
+      };
+    });
+  },
+};
+
 async function buildObsidian() {
   const worker = await esbuild.build({
     entryPoints: ["src/hosts/obsidian/pdf/workerEntry.ts"],
@@ -80,6 +102,7 @@ async function buildObsidian() {
     target: "es2020",
     minify: true,
     write: false,
+    plugins: [noDynamicCode],
     logLevel: "warning",
   });
   const workerSource = worker.outputFiles[0].text;
@@ -109,7 +132,7 @@ async function buildObsidian() {
     platform: "browser",
     target: "es2020",
     external: ["obsidian", "electron", "@codemirror/*", "@lezer/*"],
-    plugins: [embedWorker],
+    plugins: [embedWorker, noDynamicCode],
     define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
     minify: production,
     sourcemap: production ? false : "inline",

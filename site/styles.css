@@ -139,7 +139,7 @@ td.req { text-align: center; color: var(--accent); font-weight: 700; }
 .demo { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .demo .doc { padding: 20px 22px; background: var(--bg-soft); font-size: 1rem; }
 mark.hl { background: var(--hl); color: inherit; padding: 0 2px; border-radius: 3px; }
-.strike { text-decoration: line-through; text-decoration-color: var(--strike); text-decoration-thickness: 2px; }
+.strike { text-decoration: line-through 2px var(--strike); }
 .demo .note { border-top: 1px solid var(--border); padding: 12px 22px; font-size: .9rem; color: var(--fg-soft); background: var(--bg-code); }
 .demo .note b { color: var(--fg); }
 

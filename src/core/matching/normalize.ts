@@ -6,12 +6,12 @@
 
 const INLINE_STRIP: Array<[RegExp, string]> = [
   // xref / links: keep the visible label, drop the target.
-  [/xref:[^\[]*\[([^\]]*)\]/g, " $1 "],
-  [/link:[^\[]*\[([^\]]*)\]/g, " $1 "],
+  [/xref:[^[]*\[([^\]]*)\]/g, " $1 "],
+  [/link:[^[]*\[([^\]]*)\]/g, " $1 "],
   [/https?:\/\/\S+\[([^\]]*)\]/g, " $1 "],
   [/https?:\/\/\S+/g, " "],
   // footnotes, cross refs, anchors.
-  [/footnote:[^\[]*\[[^\]]*\]/g, " "],
+  [/footnote:[^[]*\[[^\]]*\]/g, " "],
   [/<<[^>]*>>/g, " "],
   [/\[\[[^\]]*\]\]/g, " "],
   // inline attributes/roles like [.lead] or {attr}.
@@ -19,7 +19,7 @@ const INLINE_STRIP: Array<[RegExp, string]> = [
   // passthrough + monospace/bold/italic/super/sub markers.
   [/[*_`^~#]+/g, " "],
   // image/icon macros.
-  [/i(?:mage|con):[^\[]*\[[^\]]*\]/g, " "],
+  [/i(?:mage|con):[^[]*\[[^\]]*\]/g, " "],
 ];
 
 /** Lines that carry no prose and should never be a match target. */
@@ -70,7 +70,7 @@ export function isVerbatimDelimiter(line: string): boolean {
  * first match is the more predictable answer.
  */
 export function verbatimLineFlags(rawLines: string[]): boolean[] {
-  const flags: boolean[] = new Array(rawLines.length).fill(false);
+  const flags: boolean[] = Array.from({ length: rawLines.length }, () => false);
   let open: string | undefined;
   for (let i = 0; i < rawLines.length; i++) {
     const delim = verbatimDelimiter(rawLines[i].trim());
@@ -95,7 +95,7 @@ export function verbatimLineFlags(rawLines: string[]): boolean[] {
  * {@link isStructuralLine} cannot know it is standing inside one.
  */
 export function commentLineFlags(rawLines: string[]): boolean[] {
-  const flags: boolean[] = new Array(rawLines.length).fill(false);
+  const flags: boolean[] = Array.from({ length: rawLines.length }, () => false);
   let inBlock = false;
   for (let i = 0; i < rawLines.length; i++) {
     const t = rawLines[i].trim();

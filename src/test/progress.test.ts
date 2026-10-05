@@ -1,7 +1,7 @@
 import * as assert from "node:assert";
 import { readFileSync } from "node:fs";
 import * as nodePath from "node:path";
-import { CancelledError, isCancelled, timeSlicer } from "../core/host/progress.js";
+import { CancelledError, isCancelled, setUiScheduler, timeSlicer } from "../core/host/progress.js";
 import { extractAnnotations, readPages } from "../core/pdf/extract.js";
 import { readPageGeometry } from "../core/pdf/pageGeometry.js";
 
@@ -47,11 +47,10 @@ describe("progress and cancellation", function () {
   it("yields only once its time budget is spent", async () => {
     let clock = 0;
     let yields = 0;
-    const real = globalThis.setTimeout;
-    (globalThis as { setTimeout: unknown }).setTimeout = (f: () => void) => {
+    setUiScheduler((run) => {
       yields++;
-      return real(f, 0);
-    };
+      setTimeout(run, 0);
+    });
     try {
       const s = timeSlicer(24, () => clock);
       await s.tick(); // 0ms spent
@@ -65,7 +64,7 @@ describe("progress and cancellation", function () {
       await s.tick();
       assert.strictEqual(yields, 1, "budget restarts after a yield");
     } finally {
-      (globalThis as { setTimeout: unknown }).setTimeout = real;
+      setUiScheduler();
     }
   });
 

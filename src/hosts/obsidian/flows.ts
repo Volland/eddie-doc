@@ -10,7 +10,7 @@
 import { MarkdownView, Notice, Platform, TFile } from "obsidian";
 import type EddiePlugin from "./main.js";
 import { choose, confirm, prompt } from "./ui/modals.js";
-import { pdfFragment, type PdfRect } from "./pure/pdfRect.js";
+import { pdfFragment } from "./pure/pdfRect.js";
 import { isCancelled, type Progress } from "../../core/host/progress.js";
 import { readPageGeometry } from "../../core/pdf/pageGeometry.js";
 import { effectiveLine, isConfident } from "../../core/matching/mapper.js";
@@ -39,7 +39,6 @@ import {
   type RevisionInfo,
 } from "../../core/model/types.js";
 import {
-  applyEdits,
   overlaps,
   parseSuggestion,
   planAllConfident,
@@ -78,7 +77,9 @@ function notify(plugin: EddiePlugin, message: string): void {
 function startOp(plugin: EddiePlugin, message: string): { progress: Progress; done(): void } {
   const ctl = plugin.beginOp();
   const n = new Notice(`${message} (click to cancel)`, 0);
-  n.noticeEl.addEventListener("click", () => ctl.abort());
+  // `messageEl` arrived in 1.8.7; older builds only have `noticeEl` (since renamed).
+  const el = n as unknown as { messageEl?: HTMLElement; noticeEl?: HTMLElement };
+  (el.messageEl ?? el.noticeEl)?.addEventListener("click", () => ctl.abort());
   return {
     progress: {
       signal: ctl.signal,
@@ -227,8 +228,7 @@ export function cancelOperation(plugin: EddiePlugin): void {
 /** Desktop only: read a PDF from anywhere and copy it into the vault. */
 async function importFromDisk(plugin: EddiePlugin): Promise<string | undefined> {
   const file = await new Promise<File | undefined>((resolve) => {
-    const input = activeDocument.createElement("input");
-    input.type = "file";
+    const input = createEl("input", { type: "file" });
     input.accept = "application/pdf,.pdf";
     input.addEventListener("change", () => resolve(input.files?.[0]));
     input.addEventListener("cancel", () => resolve(undefined));
@@ -970,7 +970,7 @@ export async function previewPdf(plugin: EddiePlugin, adocPath: string, id: stri
   }
   if (plugin.settings.pdfPreview === "own") {
     try {
-      await plugin.showPdfPreview(pdf, item.page, item.rect as number[] | undefined);
+      await plugin.showPdfPreview(pdf, item.page, item.rect);
       return;
     } catch (e) {
       plugin.host.notify.warn(`Eddie Doc: Eddie's viewer failed (${String(e)}); using Obsidian's.`);
@@ -984,7 +984,7 @@ export async function previewPdf(plugin: EddiePlugin, adocPath: string, id: stri
   const geo = geometryCache.get(gkey);
   const link =
     pdf +
-    pdfFragment(item.page, item.rect as PdfRect | undefined, plugin.settings.pdfRectMode, geo ? { view: geo.view } : undefined);
+    pdfFragment(item.page, item.rect, plugin.settings.pdfRectMode, geo ? { view: geo.view } : undefined);
 
   const { workspace } = plugin.app;
   const reuse = plugin.previewLeaf;

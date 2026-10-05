@@ -128,6 +128,7 @@ URL.revokeObjectURL = () => {};
 const check = (cond, msg) => { if (!cond) { console.error("FAIL:", msg); process.exit(1); } };
 
 (async () => {
+  globalThis.window = globalThis; // Obsidian always has one; the bundle reads it at load
   const mod = require(bundle);
   // Installed after the bundle (and CodeMirror) have loaded: CodeMirror inspects `document` on import.
   globalThis.activeDocument = globalThis.document = {

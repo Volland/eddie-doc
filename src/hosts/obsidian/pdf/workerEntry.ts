@@ -3,4 +3,4 @@
 // itself; run on the main thread, pdfjs's "fake worker" finds the handler here.
 import { WorkerMessageHandler } from "pdfjs-dist/build/pdf.worker.min.mjs";
 
-(globalThis as unknown as { pdfjsWorker: unknown }).pdfjsWorker = { WorkerMessageHandler };
+(self as unknown as { pdfjsWorker: unknown }).pdfjsWorker = { WorkerMessageHandler };

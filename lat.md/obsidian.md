@@ -96,7 +96,7 @@ A setting switches the preview to a view that draws the page and the marked rect
 
 pdfjs's browser build runs with its worker embedded in `main.js`, started from a Blob URL, and falls back to the main thread when a WebView refuses a Blob worker.
 
-[[src/hosts/obsidian/pdf/engine.ts#useObsidianPdfEngine]] picks the mode. The fallback runs the same worker code from a copy bundled as an ordinary module, so no script element is created and nothing is evaluated.
+[[src/hosts/obsidian/pdf/engine.ts#useObsidianPdfEngine]] picks the mode. The fallback runs the same worker code from a copy bundled as an ordinary module, so no script element is created and nothing is evaluated. The build also replaces pdfjs's `new Function` calls with a throwing stub (see `noDynamicCode` in esbuild.js), so the bundle holds no dynamic code at all.
 
 ### Not leaving a global behind
 

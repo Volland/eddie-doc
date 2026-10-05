@@ -20,7 +20,6 @@
  */
 import {
   PDFArray,
-  PDFDict,
   PDFDocument,
   PDFHexString,
   PDFName,
@@ -260,7 +259,7 @@ function annotsArray(doc: PDFDocument, pageIndex: number): PDFArray {
   const page = doc.getPage(pageIndex);
   const existing = page.node.lookup(PDFName.of("Annots"));
   if (existing instanceof PDFArray) return existing;
-  const arr = doc.context.obj([]) as PDFArray;
+  const arr = doc.context.obj([]);
   page.node.set(PDFName.of("Annots"), arr);
   return arr;
 }
@@ -386,7 +385,7 @@ export async function stampPdf(
       // QuadPoints is meaningful only for text-markup subtypes; on a sticky
       // note or a caret it is not part of the spec and confuses some readers.
       ...(sub === "Text" || sub === "Caret" ? {} : { QuadPoints: quads }),
-    }) as PDFDict;
+    });
     const annotRef = doc.context.register(annotDict);
     annotsArray(doc, pageIndex).push(annotRef);
     marks++;
@@ -406,7 +405,7 @@ export async function stampPdf(
         IRT: annotRef,
         RT: PDFName.of("R"),
         NM: textString(`${item.id}#${reply.id}`),
-      }) as PDFDict;
+      });
       annotsArray(doc, pageIndex).push(doc.context.register(replyDict));
       replies++;
     }

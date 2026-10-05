@@ -26,9 +26,13 @@ async function main() {
   });
   const src = worker.outputFiles[0].text;
 
+  // Obsidian always has a `window`; Node does not, and the engine reads it at import time.
+  const shim = path.join(tmp, "shim.ts");
+  fs.writeFileSync(shim, "(globalThis as { window?: unknown }).window = globalThis;\nexport {};\n");
   const entry = path.join(tmp, "entry.ts");
   const q = (p) => JSON.stringify(p.split(path.sep).join("/"));
   fs.writeFileSync(entry, `
+    import ${JSON.stringify(shim.split(path.sep).join("/"))};
     import { readFileSync } from "node:fs";
     import { useObsidianPdfEngine } from ${q(path.join(root, "src/hosts/obsidian/pdf/engine.js"))};
     import { extractAnnotations, readPages } from ${q(path.join(root, "src/core/pdf/extract.js"))};

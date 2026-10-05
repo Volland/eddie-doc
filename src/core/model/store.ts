@@ -35,7 +35,6 @@ import {
   mappingSidecarPath,
   pdfFolder,
   revisionId as revisionIdFor,
-  uniqueId,
   type LayoutConfig,
 } from "./layout.js";
 import { extractAnnotations } from "../pdf/extract.js";

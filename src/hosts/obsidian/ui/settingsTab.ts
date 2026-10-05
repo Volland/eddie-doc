@@ -25,7 +25,6 @@ export class EddieSettingTab extends PluginSettingTab {
           sl
             .setLimits(0, 1, 0.01)
             .setValue(s[key])
-            .setDynamicTooltip()
             .onChange((v) => set({ [key]: v }))
         );
 

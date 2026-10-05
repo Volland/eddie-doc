@@ -28,7 +28,7 @@ export function workerMode(): WorkerMode {
  */
 function withMainThreadWorker<T>(fn: () => T): T {
   if (mode !== "main-thread") return fn();
-  const g = globalThis as { pdfjsWorker?: unknown };
+  const g = window as unknown as { pdfjsWorker?: unknown };
   const had = Object.prototype.hasOwnProperty.call(g, "pdfjsWorker");
   const previous = g.pdfjsWorker;
   g.pdfjsWorker = { WorkerMessageHandler };

@@ -22,7 +22,7 @@ export function choose<T>(
       }
       onClose(): void {
         // onChooseItem runs after close; defer so a pick is not mistaken for a dismiss.
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (!picked) resolve(undefined);
         }, 0);
       }
@@ -73,7 +73,7 @@ class PromptModal extends Modal {
           })
       )
       .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()));
-    setTimeout(() => {
+    window.setTimeout(() => {
       input.focus();
       input.select();
     }, 0);

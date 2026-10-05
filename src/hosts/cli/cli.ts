@@ -14,6 +14,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
+import { setUiScheduler } from "../../core/host/progress.js";
 import { useNodePdfEngine } from "../node/pdfEngine.js";
 import { extractAnnotations, readPages } from "../../core/pdf/extract.js";
 import { mapAnnotations, effectiveLine } from "../../core/matching/mapper.js";
@@ -50,6 +51,7 @@ declare const __dirname: string;
 useNodePdfEngine(path.join(__dirname, "pdf.worker.mjs"));
 
 async function main(): Promise<number> {
+  setUiScheduler((run) => void setTimeout(run, 0));
   const argv = process.argv.slice(2);
   const verb = argv[0];
 

@@ -53,9 +53,10 @@ class InlineMarker extends WidgetType {
     return o.state === this.state && o.kinds.join() === this.kinds.join();
   }
   toDOM(): HTMLElement {
-    const el = activeDocument.createElement("span");
-    el.className = `eddie-inline eddie-${this.state}`;
-    el.textContent = " " + this.kinds.map((k) => KIND_GLYPH[k] ?? "•").join("");
+    const el = createSpan({
+      cls: `eddie-inline eddie-${this.state}`,
+      text: " " + this.kinds.map((k) => KIND_GLYPH[k] ?? "•").join(""),
+    });
     el.setAttribute("aria-hidden", "true"); // decoration only; never document text
     return el;
   }
@@ -141,9 +142,10 @@ class Badge extends GutterMarker {
     );
   }
   toDOM(): HTMLElement {
-    const el = activeDocument.createElement("span");
-    el.className = `eddie-badge eddie-${this.mark.state}`;
-    el.textContent = this.mark.numbers.length ? this.mark.numbers.join(",") : "•";
+    const el = createSpan({
+      cls: `eddie-badge eddie-${this.mark.state}`,
+      text: this.mark.numbers.length ? this.mark.numbers.join(",") : "•",
+    });
     el.dataset.ids = this.mark.startIds.join(" ");
     return el;
   }
@@ -154,7 +156,7 @@ function annotationGutter(bridge: EditorBridge): Extension {
     class: "eddie-gutter",
     lineMarker(view, line) {
       const m = markAt(view, line.from);
-      return m && m.startIds.length ? new Badge(m, bridge.select) : null;
+      return m && m.startIds.length ? new Badge(m, (id) => bridge.select(id)) : null;
     },
     lineMarkerChange: (u) =>
       u.docChanged || u.transactions.some((t) => t.effects.some((e) => e.is(setMarkup))),
@@ -178,8 +180,7 @@ function annotationHover(bridge: EditorBridge): Extension {
       end: line.to,
       above: true,
       create() {
-        const dom = activeDocument.createElement("div");
-        dom.className = "eddie-hover";
+        const dom = createDiv({ cls: "eddie-hover" });
         for (const id of m.ids) {
           const d = bridge.describe(id);
           if (!d) continue;

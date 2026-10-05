@@ -15,5 +15,5 @@ import { setPdfEngine, type PdfEngine } from "../../core/pdf/engine.js";
  */
 export function useNodePdfEngine(workerFile: string): void {
   GlobalWorkerOptions.workerSrc = workerFile;
-  setPdfEngine({ getDocument } as PdfEngine);
+  setPdfEngine({ getDocument });
 }

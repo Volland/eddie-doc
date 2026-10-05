@@ -98,7 +98,7 @@ export function locate(
   let best = -1;
   let bestScore = 0;
   for (let i = 0; i + L <= hay.norm.length; i++) {
-    const s = charSim(target, hay.norm.substr(i, L));
+    const s = charSim(target, hay.norm.slice(i, i + L));
     if (s > bestScore) {
       bestScore = s;
       best = i;

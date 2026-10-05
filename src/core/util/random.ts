@@ -1,7 +1,7 @@
 /** `n` random bytes as lowercase hex. Uses WebCrypto where it exists. */
 export function randomHex(n: number): string {
   const bytes = new Uint8Array(n);
-  const c = (globalThis as { crypto?: { getRandomValues?(a: Uint8Array): Uint8Array } }).crypto;
+  const c = typeof crypto === "undefined" ? undefined : (crypto as { getRandomValues?(a: Uint8Array): Uint8Array });
   if (c?.getRandomValues) c.getRandomValues(bytes);
   else for (let i = 0; i < n; i++) bytes[i] = Math.floor(Math.random() * 256);
   let out = "";

@@ -31,5 +31,6 @@ export function createVscodeHost(authorName: () => string): HostServices {
     settings: readSettings,
     authorName,
     capabilities: { semanticFallback: true, externalFiles: true },
+    fetch: (url, init) => fetch(url, init),
   };
 }
