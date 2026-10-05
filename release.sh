@@ -6,7 +6,9 @@
 #   ./release.sh [patch|minor|major|X.Y.Z] [local|github|marketplace|all]
 #
 # One release ships both hosts under one version: the .vsix, and the Obsidian
-# plugin's main.js / manifest.json / styles.css as separate release assets.
+# plugin's main.js / manifest.json / styles.css as separate release assets. For the
+# github target the script verifies, bumps, tags and pushes; the Release workflow then
+# builds from a clean checkout, attests the files and publishes (see the workflow).
 #
 # Defaults: bump=patch, target=local.
 #   local        bump + build + package + install the .vsix into VS Code
@@ -63,8 +65,9 @@ npm run build
 npm run verify:obsidian-engine
 npm run smoke:obsidian
 npx --yes @vscode/vsce package --skip-license -o "$VSIX"
-OBSIDIAN_ASSETS=(dist/obsidian/main.js dist/obsidian/manifest.json dist/obsidian/styles.css)
-for f in "${OBSIDIAN_ASSETS[@]}"; do [ -f "$f" ] || { echo "[x] missing $f"; exit 1; }; done
+# Built here only to prove the build works before anything is tagged; CI builds the
+# files that are actually published.
+for f in dist/obsidian/main.js dist/obsidian/manifest.json dist/obsidian/styles.css; do [ -f "$f" ] || { echo "[x] missing $f"; exit 1; }; done
 
 echo "[4/4] Publishing (target: $TARGET)..."
 want_github=false; want_market=false
@@ -87,25 +90,25 @@ if $want_github; then
   fi
   git push origin HEAD
   git push origin "$NEW_TAG"
-  if gh release view "$NEW_TAG" >/dev/null 2>&1; then
-    gh release upload "$NEW_TAG" "$VSIX" "${OBSIDIAN_ASSETS[@]}" --clobber
-  else
-    gh release create "$NEW_TAG" "$VSIX" "${OBSIDIAN_ASSETS[@]}" --title "Eddie Doc $NEW_TAG" --generate-notes
-  fi
-  echo "       -> $(gh release view "$NEW_TAG" --json url -q .url)"
 
-  # Obsidian (and BRAT) find a plugin release by a tag equal to manifest.json's
-  # version with no "v", so the plugin files get a second release under that tag.
-  # Pre-release versions (1.4.0-beta.1) are marked as such.
-  PRE=""; case "$VERSION" in *-*) PRE="--prerelease" ;; esac
-  if gh release view "$VERSION" >/dev/null 2>&1; then
-    gh release upload "$VERSION" "${OBSIDIAN_ASSETS[@]}" --clobber
-  else
-    gh release create "$VERSION" "${OBSIDIAN_ASSETS[@]}" $PRE \
-      --title "Eddie Doc $VERSION (Obsidian plugin)" \
-      --notes "Obsidian plugin files for Eddie Doc $VERSION (main.js, manifest.json, styles.css). Install with BRAT (Volland/eddie-doc) or copy them into <vault>/.obsidian/plugins/eddie-doc/. The VS Code extension is on release $NEW_TAG." \
-      --target "$(git rev-parse HEAD)"
-  fi
+  # Pushing the tag starts .github/workflows/release.yml, which rebuilds everything from a
+  # clean checkout, ATTESTS the release files (provenance) and publishes both releases:
+  #   $NEW_TAG   the VS Code .vsix plus the Obsidian files
+  #   $VERSION   the Obsidian files only (Obsidian looks a plugin release up by a tag with no "v")
+  # It is the only publisher, so a laptop build can never replace an attested file.
+  echo "       waiting for the Release workflow..."
+  RUN=""
+  for _ in $(seq 1 30); do
+    RUN="$(gh run list --workflow Release --event push --branch "$NEW_TAG" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+    [ -n "$RUN" ] && break
+    sleep 2
+  done
+  [ -n "$RUN" ] || { echo "[x] The Release workflow did not start. Check the Actions tab."; exit 1; }
+  gh run watch "$RUN" --exit-status || { echo "[x] The Release workflow failed: $(gh run view "$RUN" --json url --jq .url)"; exit 1; }
+
+  # Both releases are created last-one-"Latest"; make the complete one the repo's Latest.
+  gh release edit "$NEW_TAG" --latest >/dev/null 2>&1 || true
+  echo "       -> $(gh release view "$NEW_TAG" --json url -q .url)"
   echo "       -> $(gh release view "$VERSION" --json url -q .url)"
 fi
 

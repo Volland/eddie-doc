@@ -24,7 +24,7 @@ A pre-release is on GitHub and installs through BRAT today.
 | Code, build, tests | Done. `npm test` (362), `npm run check:core`, `npm run test:obsidian` pass |
 | Manifest and versions | Done. `manifest.json` and `versions.json` at the repo root, kept on the package version by `npm version` |
 | README, guide, licence, privacy | Done. `README.md`, `docs/OBSIDIAN.md` (network use, no telemetry), `LICENSE` (MIT) |
-| Release automation | Written, never run: `.github/workflows/release.yml`, `release.sh` |
+| Release automation | In use since 1.4.0: `release.sh` verifies, bumps, tags and pushes; `.github/workflows/release.yml` builds from a clean checkout, **attests** every release file (GitHub artifact attestation) and publishes. Attestations exist from 1.4.2 |
 | Plugin id and name | Free. Checked against the community list (8,424 plugins) on 2026-10-05: no `eddie-doc` id, no "Eddie Doc" name. Re-check at submission time |
 | **Run in a real Obsidian** | **Desktop done, phone not.** `npm run e2e:obsidian` passes 65 of 65 on Obsidian 1.8.4 and 1.13.7 (macOS), including the AsciiDoc Live pairing. `docs/obsidian-qa.md` has not been run by a person on any platform, and nothing has run on iOS or Android |
 | **Mobile spike** | **Not done.** `docs/obsidian-spike-results.md` records the desktop answers; the phone rows are empty |
@@ -51,7 +51,7 @@ git status                       # clean tracked tree; release.sh refuses otherw
 ./release.sh 1.4.0-beta.1 github # or: patch | minor | major
 ```
 
-`release.sh` bumps the version (`package.json`, `manifest.json`, `versions.json`, the sidecar producer stamp), builds both products, runs the Obsidian engine check and smoke test, packages the `.vsix`, pushes the commit and tag, and creates two releases:
+`release.sh` bumps the version (`package.json`, `manifest.json`, `versions.json`, the sidecar producer stamp), builds both products to check they build, runs the Obsidian engine check and smoke test, and pushes the commit and tag. Pushing the tag starts the Release workflow, which is the **only** thing that publishes: it rebuilds from a clean checkout, attests the files, and creates two releases:
 
 | Release | Tag | Contains | Why |
 | --- | --- | --- | --- |
@@ -59,6 +59,14 @@ git status                       # clean tracked tree; release.sh refuses otherw
 | Obsidian | `1.4.0-beta.1` | `main.js`, `manifest.json`, `styles.css` | Obsidian and BRAT look a plugin release up by a tag equal to the manifest version, with no `v` |
 
 A version containing `-` is marked as a pre-release. Pushing the `v` tag also starts `.github/workflows/release.yml`, which does the same from a clean checkout and fails if the tag, `package.json` and `manifest.json` disagree. Either path can create the releases; the other updates them rather than failing.
+
+**Attestations.** The community directory recommends GitHub artifact attestations on the release files, so users can verify a downloaded file was built from this repository. The workflow attests `main.js`, `manifest.json`, `styles.css` and the `.vsix` before uploading them (it has `id-token: write` and `attestations: write` for that). Check one with:
+
+```bash
+gh attestation verify main.js --repo Volland/eddie-doc
+```
+
+A file can only be attested by the workflow that built it, which is why `release.sh` no longer uploads anything itself. Releases `1.4.0`–`1.4.1` were uploaded without attestations; `1.4.2` is the first with them.
 
 If you would rather have only one tag style, switch the repository to tags without `v` (change `NEW_TAG` in `release.sh` and the trigger in `release.yml`); the VS Code side does not care.
 

@@ -6,6 +6,11 @@ name: Release
 # Obsidian (and BRAT) look a plugin release up by a tag equal to manifest.json's
 # version, with no "v", so the second release is what Obsidian installs from.
 # A tag containing "-" (v1.4.0-beta.1) is published as a pre-release.
+#
+# This workflow is the only thing that publishes release files. Each file is attested
+# (GitHub artifact attestation, SLSA provenance) before it is uploaded, so anyone can
+# check that a downloaded main.js was built from this repository by this workflow:
+#   gh attestation verify main.js --repo Volland/eddie-doc
 
 on:
   push:
@@ -13,6 +18,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write      # lets the attest step obtain a signing identity for this run
+  attestations: write  # lets it record the attestation against this repository
 
 jobs:
   release:
@@ -47,6 +54,16 @@ jobs:
 
       - name: Package the VS Code extension
         run: npx --yes @vscode/vsce package --skip-license -o "eddie-doc-${{ steps.version.outputs.version }}.vsix"
+
+      # Attest the exact bytes that are uploaded below; the release steps read the same paths.
+      - name: Attest the release files
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/obsidian/main.js
+            dist/obsidian/manifest.json
+            dist/obsidian/styles.css
+            eddie-doc-${{ steps.version.outputs.version }}.vsix
 
       - name: Release v${{ steps.version.outputs.version }} (VS Code + all files)
         uses: softprops/action-gh-release@v2

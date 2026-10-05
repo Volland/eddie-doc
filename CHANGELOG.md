@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-05
+
+Release files now carry GitHub artifact attestations, which the community directory
+recommends: anyone can run `gh attestation verify main.js --repo Volland/eddie-doc` to
+check that a downloaded file was built from this repository by the release workflow.
+CI is now the only thing that publishes release files; `release.sh` pushes the tag and
+waits for the workflow. No change to the plugin itself.
+
 ## [1.4.1] - 2026-10-05
 
 Obsidian plugin: changes made after reading Obsidian's current plugin guidelines,
