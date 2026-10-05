@@ -16,6 +16,9 @@
  *   E2E_SHOTS=<dir>      save a screenshot after each scenario
  *   E2E_ASCIIDOC_LIVE=1  also install AsciiDoc Live into the throwaway vault (downloads
  *                        a public community plugin from GitHub) and test the pairing
+ *   E2E_PLUGIN_DIR=<dir> test the main.js, manifest.json and styles.css in <dir> instead of
+ *                        dist/obsidian: e.g. the files downloaded from a GitHub release, to
+ *                        prove that what was published is what was tested
  *   E2E_KEEP=1           leave the temp directory and the app running for inspection
  *   E2E_ASAR_FROM=<dir>  copy obsidian-*.asar from <dir> into the private data folder, to test a
  *                        newer app build the app has already downloaded (it is used only if
@@ -51,10 +54,10 @@ if (!fs.existsSync(BIN)) {
   console.log(`e2e-obsidian: skipped — Obsidian not found at ${BIN} (set OBSIDIAN_BIN).`);
   process.exit(0);
 }
-const dist = path.join(root, "dist/obsidian");
+const dist = process.env.E2E_PLUGIN_DIR ? path.resolve(process.env.E2E_PLUGIN_DIR) : path.join(root, "dist/obsidian");
 for (const f of ["main.js", "manifest.json", "styles.css"]) {
   if (!fs.existsSync(path.join(dist, f))) {
-    console.error(`e2e-obsidian: ${f} missing from dist/obsidian — run: npm run build`);
+    console.error(`e2e-obsidian: ${f} missing from ${dist} — run: npm run build`);
     process.exit(1);
   }
 }
@@ -201,7 +204,7 @@ async function main() {
 
   section("1. Loads and registers");
   check(await waitFor(`!!${P}`, 20000), "the plugin loaded in Obsidian");
-  check(await ev(`app.plugins.manifests["eddie-doc"].version`) === require(path.join(root, "package.json")).version, "manifest version equals package.json");
+  check(await ev(`app.plugins.manifests["eddie-doc"].version`) === JSON.parse(fs.readFileSync(path.join(dist, "manifest.json"), "utf8")).version, "Obsidian reads the version from the manifest it was given");
   check(await ev(`Object.keys(app.commands.commands).filter(c=>c.startsWith("eddie-doc:")).length`) >= 32, "all commands are registered");
   check(await ev(`["eddie-review","eddie-pdf-preview"].every(t=>t in app.viewRegistry.viewByType)`), "both views are registered");
   check(await ev(`JSON.stringify(${P}.claimed)`) === `["adoc","asciidoc"]`, "claimed .adoc and .asciidoc when nothing else holds them", await ev(`JSON.stringify(${P}.claimed)`));

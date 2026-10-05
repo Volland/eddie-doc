@@ -2,6 +2,21 @@
 
 What is ready, what is not, and the exact steps. Nothing here has been run: no release has been cut and no pull request has been opened.
 
+## Released: 1.4.0-beta.1 (2026-10-05)
+
+A pre-release is on GitHub and installs through BRAT today.
+
+| | |
+| --- | --- |
+| Obsidian files (what BRAT and Obsidian read) | <https://github.com/Volland/eddie-doc/releases/tag/1.4.0-beta.1>: `main.js`, `manifest.json`, `styles.css` |
+| VS Code build and the same files | <https://github.com/Volland/eddie-doc/releases/tag/v1.4.0-beta.1>: the `.vsix` too. Not on the Marketplace |
+| Checked after publishing | CI and the release workflow passed on GitHub; the three downloaded files are byte-identical to the local build; `E2E_PLUGIN_DIR=<downloaded files> npm run e2e:obsidian` passes 65 of 65 on Obsidian 1.8.4 |
+| Not done | Phone testing; the community-list pull request; the VS Code Marketplace |
+
+**Try it in Obsidian:** install the BRAT community plugin, then *BRAT → Add beta plugin* → `Volland/eddie-doc`, enable *Eddie Doc*. On a phone, do the same inside the mobile app, or copy the three files into `<vault>/.obsidian/plugins/eddie-doc/` through your sync. Then run *Eddie Doc: Open PDF review* on a PDF and `.adoc` in the vault.
+
+**Promote it:** when a phone has been tried and the QA table is filled in, `./release.sh patch github` cuts `1.4.0` (or `./release.sh 1.4.0 github`), then follow section 2 below.
+
 ## Where it stands
 
 | | State |

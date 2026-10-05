@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.0-beta.1] - 2026-10-05
+
+Pre-release, the first Obsidian build, published on GitHub only (not the VS Code
+Marketplace). Tested on desktop Obsidian; not yet on a phone.
+
 ### Added
 - **Obsidian plugin.** Eddie Doc now also runs in Obsidian, desktop and mobile,
   from the same package and the same review format. A review panel replaces
