@@ -17,11 +17,11 @@ in another.
 
 | | VS Code extension | Obsidian plugin |
 | --- | --- | --- |
-| Status | Released ([Marketplace](https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc)) | New; first release pending. Tested on desktop Obsidian, not yet on a phone |
+| Status | Released ([Marketplace](https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc)) | 1.4.0, [on GitHub](https://github.com/Volland/eddie-doc/releases); BRAT-installable. Tested on desktop Obsidian and tried on a phone |
 | Where marks show | Activity-bar tree, inline decorations, Problems panel, gutter threads | One review panel, line highlights, gutter badges, hover |
 | Acting on a mark | Lightbulb quick fixes | "Apply to the source" buttons in the panel |
 | Default review folder | `.eddie` | `Eddie Reviews` (visible, so it syncs) |
-| Mobile | No | Yes, same code (emulated, not yet run on a phone) |
+| Mobile | No | Yes, same code (tried on a phone by hand; not measured) |
 | Semantic fallback (Ollama) | Yes | Desktop only |
 | Review format | v3 sidecar | v3 sidecar, the same files |
 

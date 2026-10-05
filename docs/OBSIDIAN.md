@@ -4,8 +4,8 @@ Eddie Doc reads the annotated PDF your editor sends back, recovers the text unde
 
 This guide covers the Obsidian plugin. For the VS Code extension, see the [README](../README.md). Both use the same core and the same on-disk format, so a review started in one can be continued in the other.
 
-> **Status: new. Tested on desktop Obsidian, not yet on a phone.**
-> The first Obsidian release has not been published yet.
+> **Status: first stable release (1.4.0). Tested on desktop Obsidian and tried on a phone by the maintainer.**
+> It is installable from GitHub releases and through BRAT, and is not yet in Obsidian's community plugin list. The phone test was a hands-on try, not a measured one: there are no timings, and a roughly 300-page PDF on a phone has not been characterised.
 >
 > **Checked in a running Obsidian** (macOS, versions 1.8.4 and 1.13.7, 65 automated checks each, `npm run e2e:obsidian`): the plugin loads and registers its 32 commands and both views; it claims `.adoc` when nothing else holds it; mapping the sample PDF through the picker finds all 5 annotations with PDF parsing in a Blob worker; the sidecar, copied PDF and anchors are written where they should be; the panel, thread, reply (with the one-time name prompt), resolve and status bar work; Eddie's PDF viewer draws the right page with the marker on it; "Delete struck text" removes exactly the struck words and one Undo restores them; a reply written into the sidecar from outside shows up; renaming the manuscript or the review folder keeps the review attached; commands are hidden when they cannot apply; disabling and re-enabling is clean; and with [AsciiDoc Live](https://github.com/koshlensky/asciidoc-live) 1.0.1 installed, Eddie leaves `.adoc` to it, opens its own source tab beside it on Reveal, and AsciiDoc Live's preview follows edits made there. The phone layout was checked with Obsidian's mobile emulation (44 px targets, list and thread shown one at a time).
 >
@@ -13,7 +13,7 @@ This guide covers the Obsidian plugin. For the VS Code extension, see the [READM
 >
 > **Not checked:**
 >
-> - a real phone or tablet (iOS, Android): PDF parsing there, memory, and speed on a roughly 300-page PDF
+> - phones and tablets beyond the maintainer's hands-on try: both platforms, PDF parsing memory, and speed on a roughly 300-page PDF
 > - Windows and Linux
 > - how it behaves alongside Obsidian Sync, iCloud, Syncthing and similar
 > - the other AsciiDoc plugins (Asciidoctor editor, Asciidoc Reader)
@@ -61,11 +61,11 @@ Words used in this guide:
 
 ## Install
 
-The first Obsidian release is pending, so the steps below describe how installation will work once it is published.
+Releases are on [GitHub](https://github.com/Volland/eddie-doc/releases); the Obsidian files are on the release whose tag is the bare version number (for example `1.4.0`).
 
 ### Manual install
 
-1. Download `main.js`, `manifest.json` and `styles.css` from the plugin release on the [GitHub releases page](https://github.com/Volland/eddie-doc/releases). Until a release exists, build them from the repository.
+1. Download `main.js`, `manifest.json` and `styles.css` from the release whose tag has no `v` (for example `1.4.0`) on the [GitHub releases page](https://github.com/Volland/eddie-doc/releases).
 2. Put the three files in `<your vault>/.obsidian/plugins/eddie-doc/`. Create the folder if it does not exist.
 3. In Obsidian, open Settings, Community plugins, turn off Restricted mode if it is on, and enable Eddie Doc.
 
@@ -73,7 +73,7 @@ The plugin needs Obsidian 1.7.2 or later (the newest API it calls is `Workspace.
 
 ### BRAT
 
-Once a release exists you can install and update it with the BRAT plugin: in BRAT choose "Add beta plugin" and enter `Volland/eddie-doc`.
+You can install and update it with the BRAT plugin: in BRAT choose "Add beta plugin" and enter `Volland/eddie-doc`.
 
 ### Community plugin list
 
@@ -418,7 +418,7 @@ The one network feature is the optional semantic fallback, on desktop only and o
 
 ## Limitations
 
-- Tested on desktop Obsidian only; not yet on a phone (see the status box).
+- Phone testing so far is a hands-on try, not a measured one (see the status box).
 - No AsciiDoc rendering.
 - Comment threads are not shown inline in the editor; they live in the panel.
 - Merging two devices' edits to one sidecar covers replies and added annotations, not resolved flags or edits to the same reply.
@@ -456,7 +456,7 @@ Eddie Doc started as a VS Code extension. The matching, the PDF reading, the rev
 | Edits | Lightbulb quick fixes | "Apply to the source" buttons |
 | Default review folder | `.eddie` | `Eddie Reviews` |
 | PDFs copied into the review folder | Optional (off by default) | Always |
-| Mobile | No | Yes (emulated in Obsidian, not yet run on a phone) |
+| Mobile | No | Yes (tried by hand on a phone; not measured) |
 | Semantic fallback (Ollama) | Yes | Desktop only |
 | Sidecar format | v3 | v3, same files |
 

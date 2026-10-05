@@ -15,7 +15,7 @@ A pre-release is on GitHub and installs through BRAT today.
 
 **Try it in Obsidian:** install the BRAT community plugin, then *BRAT → Add beta plugin* → `Volland/eddie-doc`, enable *Eddie Doc*. On a phone, do the same inside the mobile app, or copy the three files into `<vault>/.obsidian/plugins/eddie-doc/` through your sync. Then run *Eddie Doc: Open PDF review* on a PDF and `.adoc` in the vault.
 
-**Promote it:** when a phone has been tried and the QA table is filled in, `./release.sh patch github` cuts `1.4.0` (or `./release.sh 1.4.0 github`), then follow section 2 below.
+**Promoted:** after the maintainer tried it on a phone, `./release.sh 1.4.0 github` cut the stable release (see below), and section 2 is the next step.
 
 ## Where it stands
 

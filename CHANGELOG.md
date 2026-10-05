@@ -5,10 +5,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.4.0-beta.1] - 2026-10-05
+## [1.4.0] - 2026-10-05
 
-Pre-release, the first Obsidian build, published on GitHub only (not the VS Code
-Marketplace). Tested on desktop Obsidian; not yet on a phone.
+The first Obsidian release, published on GitHub (not the VS Code Marketplace).
+Tested on desktop Obsidian (1.8.4 and 1.13.7) and tried by hand on a phone; large
+PDFs on a phone have not been measured. A pre-release, 1.4.0-beta.1, preceded it.
 
 ### Added
 - **Obsidian plugin.** Eddie Doc now also runs in Obsidian, desktop and mobile,
