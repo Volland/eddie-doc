@@ -8,6 +8,18 @@ The VS Code extension uses the shared core through the same ports as every Host,
 
 Storage is the Node adapter, settings are read from `eddieDoc.*` configuration through [[src/hosts/vscode/host.ts#readSettings]], and the author's name falls back to `git config user.name`, which is why that lookup stays in the extension. `deactivate` flushes queued saves so no review state is lost.
 
+## Bundled CLI
+
+The extension ships the `eddie` CLI and makes it usable without a Node install: it is on every integrated terminal's PATH and can be linked into the shell's.
+
+[[src/hosts/vscode/cli.ts#installCliFiles]] copies `dist/cli.js` and its pdfjs worker into global storage, because the extension's own folder is renamed on every update, and writes an `eddie` launcher that runs them on VS Code's runtime with `ELECTRON_RUN_AS_NODE`, falling back to `node`. [[src/hosts/vscode/cli.ts#exposeOnTerminalPath]] prepends that folder to terminal PATHs (setting `eddieDoc.cli.addToTerminalPath`). The commands `Install 'eddie' Command in PATH` and `Open Terminal with Eddie CLI` cover other shells. The CLI itself is described in [[cli]].
+
+## Sidecars changed on disk
+
+A sidecar changed outside the window, by `eddie` in a terminal, a sync client or another editor, is re-read so the tree shows what is on disk.
+
+A file watcher on `**/*.review.json` calls [[src/core/model/store.ts#ReviewStore#reloadFromDisk]] once writes settle, the same path Obsidian takes. The store ignores the echo of its own writes and keeps unsaved work for its next write to reconcile.
+
 ## Native surfaces
 
 VS Code's Comments API, Problems panel, tree view and lightbulb are used directly; the Obsidian panel exists because Obsidian has none of them.

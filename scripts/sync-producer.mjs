@@ -25,6 +25,11 @@ writeFileSync("manifest.json", JSON.stringify(manifest, null, 2) + "\n");
 const versions = JSON.parse(readFileSync("versions.json", "utf8"));
 versions[version] = manifest.minAppVersion;
 writeFileSync("versions.json", JSON.stringify(versions, null, 2) + "\n");
+// The npm CLI package ships under the same version as the extension.
+const cliPkgFile = "packages/cli/package.json";
+const cliPkg = JSON.parse(readFileSync(cliPkgFile, "utf8"));
+cliPkg.version = version;
+writeFileSync(cliPkgFile, JSON.stringify(cliPkg, null, 2) + "\n");
 // stderr, NOT stdout: release.sh captures `npm version`'s stdout to read the
 // new tag, and lifecycle-hook stdout would corrupt it.
-console.error(`sync-producer: ${file}, manifest.json, versions.json -> ${version}`);
+console.error(`sync-producer: ${file}, manifest.json, versions.json, ${cliPkgFile} -> ${version}`);

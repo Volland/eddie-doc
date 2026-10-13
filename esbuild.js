@@ -54,7 +54,14 @@ const common = {
  */
 const STDOUT_GUARD = `
 (() => {
-  const toStderr = (...a) => { try { process.stderr.write(a.join(" ") + "\\n"); } catch {} };
+  // pdfjs's "Warning: Cannot polyfill DOMMatrix…" lines are noise for text
+  // extraction; they are shown only with EDDIE_DEBUG set.
+  const debug = !!process.env.EDDIE_DEBUG;
+  const toStderr = (...a) => {
+    const line = a.join(" ");
+    if (!debug && /^Warning: Cannot /.test(line)) return;
+    try { process.stderr.write(line + "\\n"); } catch {}
+  };
   console.log = toStderr;
   console.info = toStderr;
   console.warn = toStderr;
@@ -176,7 +183,7 @@ async function main() {
   const entries = [
     { entry: "src/hosts/vscode/extension.ts", outfile: "dist/extension.js", external: ["vscode"] },
     // CLI entries write machine-readable output; guard their stdout.
-    { entry: "src/hosts/cli/cli.ts", outfile: "dist/cli.js", external: [], guardStdout: true },
+    { entry: "src/hosts/cli/cli.ts", outfile: "dist/cli.js", external: [], guardStdout: true, shebang: true },
     { entry: "src/hosts/cli/benchmark/main.ts", outfile: "dist/bench.js", external: [], guardStdout: true },
   ].filter((e) => fs.existsSync(path.join(__dirname, e.entry)));
 
@@ -187,7 +194,8 @@ async function main() {
         entryPoints: [e.entry],
         outfile: e.outfile,
         external: e.external,
-        ...(e.guardStdout ? { banner: { js: STDOUT_GUARD } } : {}),
+        // The shebang lets the npm package expose dist/cli.js directly as `eddie`.
+        ...(e.guardStdout ? { banner: { js: (e.shebang ? "#!/usr/bin/env node\n" : "") + STDOUT_GUARD } } : {}),
       })
     )
   );

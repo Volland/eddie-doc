@@ -80,6 +80,38 @@ Suggested edits must be exact offsets that any Host can apply as one change.
 
 It deletes only the struck words and one neighbouring space, replaces marked text, inserts after a caret mark, deletes whole lines including the last, inserts a note keeping indentation and line endings, and plans nothing for an unplaced mark.
 
+## CLI
+
+The `eddie` command line, driven in-process through its dispatcher against a temporary copy of the sample chapter.
+
+### Argument parsing
+
+Positionals, value flags, booleans and repeated flags must be told apart without a per-command schema.
+
+A lone `-` (stdin), a negative number and everything after `--` are positionals, and a value flag with no value is a usage error.
+
+### Settings like the editor
+
+Settings must be read the way VS Code reads them, so the CLI writes where the editor would.
+
+`.vscode/settings.json` is JSONC; it is layered under `.eddie.json`, `EDDIE_DOC_*` variables and flags, each value's source is recorded, the workspace root is found from a subfolder, and an unknown `--set` key is refused.
+
+### Every command documented
+
+Every command must have a summary, a usage line, and appear in `eddie help`; an unknown command exits with 2.
+
+### Review lifecycle from the terminal
+
+A whole review must run from the CLI and leave sidecars the editor's store reads back unchanged.
+
+Mapping writes into the review folder and anchors the source; remarks are listed, resolved, answered and confirmed by number; a hand link and a re-map round-trip; `apply` refuses to write without `--yes`; the report and the stamped PDF land in the round folder; a new round carries state forward; a mapping is deleted only when named and confirmed; a document with no review fails clearly.
+
+### Terminal UI
+
+The full-screen browser must navigate, act and write the sidecar exactly as the commands do, and fit any screen it is given.
+
+It skips single-choice levels, keeps every line within the width, goes back and quits; resolves, replies and relinks to a typed line; filters by group and text; applies a fix only after showing the diff and confirming; offers ranked triage lines; and lists every key on `?`.
+
 ## Annotation view
 
 How a review list groups and filters annotations, shared by every Host.

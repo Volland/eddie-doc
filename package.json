@@ -28,7 +28,8 @@
     "review",
     "editing",
     "proofreading",
-    "adoc"
+    "adoc",
+    "cli"
   ],
   "galleryBanner": {
     "color": "#2f6feb",
@@ -208,6 +209,16 @@
         "command": "eddieDoc.stripAnchors",
         "title": "Eddie Doc: Remove Source Anchors",
         "icon": "$(pin)"
+      },
+      {
+        "command": "eddieDoc.installCli",
+        "title": "Eddie Doc: Install 'eddie' Command in PATH",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "eddieDoc.openCliTerminal",
+        "title": "Eddie Doc: Open Terminal with Eddie CLI",
+        "icon": "$(terminal)"
       }
     ],
     "viewsContainers": {
@@ -320,6 +331,11 @@
           "command": "eddieDoc.migrateReviews",
           "when": "view == eddieDoc.annotations",
           "group": "3_storage@1"
+        },
+        {
+          "command": "eddieDoc.openCliTerminal",
+          "when": "view == eddieDoc.annotations",
+          "group": "3_storage@2"
         }
       ],
       "view/item/context": [
@@ -546,6 +562,12 @@
         {
           "command": "eddieDoc.previewAnnotation",
           "when": "false"
+        },
+        {
+          "command": "eddieDoc.installCli"
+        },
+        {
+          "command": "eddieDoc.openCliTerminal"
         }
       ]
     },
@@ -660,6 +682,11 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Minimum trigram-containment score (0-1) for the lexical fallback to link an annotation to a source paragraph."
+        },
+        "eddieDoc.cli.addToTerminalPath": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Put the bundled `eddie` command line on the `PATH` of VS Code's integrated terminals, so every capability of this extension can be scripted (`eddie help`). Run **Eddie Doc: Install 'eddie' Command in PATH** to use it in other shells too."
         }
       }
     }
@@ -680,8 +707,11 @@
     "pretest": "npm run check:core && npm run compile-tests",
     "test": "mocha \"out/test/**/*.test.js\"",
     "cli": "node dist/cli.js",
+    "build:cli-package": "npm run build && node scripts/build-cli-package.mjs",
+    "pack:cli": "npm run build:cli-package && cd packages/cli && npm pack",
+    "publish:cli": "npm run build:cli-package && cd packages/cli && npm publish --access public",
     "bench": "npm run build && node dist/bench.js",
-    "version": "node scripts/sync-producer.mjs && git add src/core/model/format.ts manifest.json versions.json"
+    "version": "node scripts/sync-producer.mjs && git add src/core/model/format.ts manifest.json versions.json packages/cli/package.json"
   },
   "devDependencies": {
     "@codemirror/state": "^6.5.0",

@@ -13,3 +13,8 @@ eddie-doc-*.vsix
 .DS_Store
 .mcp.json
 lat.md/.cache/
+
+# Assembled by scripts/build-cli-package.mjs
+packages/cli/dist/
+packages/cli/LICENSE
+packages/cli/*.tgz

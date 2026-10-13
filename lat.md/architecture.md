@@ -76,4 +76,4 @@ Reading a PDF reports per-page progress, honours cancellation, frees each page a
 
 One `esbuild.js` produces the VS Code extension, the CLI, the benchmark and the Obsidian plugin from the same tree.
 
-`dist/extension.js` and `dist/cli.js` target Node. `dist/obsidian/{main.js,manifest.json,styles.css}` targets a browser environment, treats `obsidian`, `electron` and CodeMirror as external, and fails if any Node builtin appears in the output.
+`dist/extension.js` and `dist/cli.js` target Node; `dist/cli.js` also ships inside the VSIX and as the `@eddie-doc/cli` npm package (see [[cli#Distribution]]). `dist/obsidian/{main.js,manifest.json,styles.css}` targets a browser environment, treats `obsidian`, `electron` and CodeMirror as external, and fails if any Node builtin appears in the output.

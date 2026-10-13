@@ -27,8 +27,10 @@ in another.
 
 - **Obsidian plugin:** see [docs/OBSIDIAN.md](docs/OBSIDIAN.md).
 - **VS Code extension:** the rest of this README.
-- **Command line:** extraction, mapping, reports, stamping and anchor removal
-  without an editor; see the [Development](#development) section.
+- **Command line:** `eddie`, every VS Code command as a terminal verb, for
+  build scripts, CI and AI agents. `npm install -g @eddie-doc/cli`, or use the
+  copy bundled with the extension; see [Command line](#command-line) and the
+  [CLI reference](packages/cli/README.md).
 - **Website:** <https://volland.github.io/eddie-doc/>.
 
 The review file both hosts write is described in the
@@ -415,7 +417,7 @@ grouped into Open / Needs review / Unmatched / Resolved with comments, line
 numbers and notes — ready to send back to that editor. It goes to the round's
 folder (`.eddie/…/rev-2/acme-copyedit.review.md`) unless `eddieDoc.reportOutput`
 says otherwise, and the sidecar records it as an artifact. Also available
-headless via `node dist/cli.js book.pdf book.adoc --report`.
+from the terminal with `eddie report chapter.adoc`.
 
 With several editors on one round, export once per mapping: each report covers
 one editor's marks and your answers to them, which is what that editor needs
@@ -547,6 +549,33 @@ sidecar stays readable if you move it.
 Version 1 and 2 sidecars are migrated transparently on first write; a v2 file
 becomes the sole mapping of `rev-1`.
 
+## Command line
+
+`eddie` gives every command in this extension a terminal equivalent: map a PDF,
+list and answer remarks, apply edits, triage, export reports and stamp PDFs. It
+reads the same `eddieDoc.*` settings from `.vscode/settings.json` and writes the
+same sidecars, so the tree updates as soon as a command finishes.
+
+- **In VS Code:** `eddie` is on the PATH of every integrated terminal (setting
+  `eddieDoc.cli.addToTerminalPath`). **Eddie Doc: Install 'eddie' Command in
+  PATH** links it into `~/.local/bin` for other shells; **Eddie Doc: Open
+  Terminal with Eddie CLI** opens one ready to use. It runs on VS Code's own
+  runtime, so no Node install is needed.
+- **Anywhere else:** `npm install -g @eddie-doc/cli` (Node 18+).
+
+```bash
+eddie open   src/ch04.adoc ~/Downloads/ch04-acme.pdf --origin Acme
+eddie list   src/ch04.adoc --bucket open,review
+eddie reply  src/ch04.adoc 7 "Reworded."  &&  eddie resolve src/ch04.adoc 7
+eddie apply  src/ch04.adoc --dry-run
+eddie stamp  build/ch04.pdf src/ch04.adoc
+eddie tui                                # browse and act full-screen
+```
+
+The full command reference, configuration, JSON output and CI recipes are in
+[packages/cli/README.md](packages/cli/README.md), which is also the npm
+package's README.
+
 ## Development
 
 ```bash
@@ -556,8 +585,10 @@ npm run typecheck      # tsc --noEmit
 npm test               # mocha unit tests
 npm run bench          # matching-quality gate against sample/*.golden.json
 
-# Prove extraction + mapping outside VS Code:
-node dist/cli.js <annotated.pdf> <source.adoc> [--json|--report] [--lexical]
+# Run the CLI from the build; package it for npm:
+node dist/cli.js help
+npm run pack:cli       # packages/cli/eddie-doc-cli-<version>.tgz
+npm run publish:cli    # npm publish (needs npm login)
 
 # Regenerate the sample fixture (needs asciidoctor-pdf + python3 PyMuPDF):
 asciidoctor-pdf -o sample/chapter-01.pdf sample/chapter-01.adoc
@@ -591,7 +622,7 @@ src/
   ui/precise.ts         resolve exact edit ranges/positions in the document
   util.ts               AsciiDoc document detection
   extension.ts          activation, commands, wiring
-  cli.ts                standalone extraction/mapping harness
+  hosts/cli/            the `eddie` CLI (commands.ts: one verb per editor command)
   test/                 mocha unit tests (normalize / fuzzy / mapper)
 ```
 

@@ -5,6 +5,33 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`eddie` CLI with every VS Code command.** `open`, `append`, `merge`, `rounds`,
+  `describe`, `delete`, `remap`, `list`, `show`, `resolve`, `reopen`, `confirm`,
+  `relink`, `remap-item`, `triage` (with `-i`), `reply`, `preview`, `apply`, `fix`,
+  `anchor`, `strip`, `report`, `stamp`, `extract`, `map`, `status`, `folder`,
+  `migrate`, `config`. It runs the shared review store, reads `eddieDoc.*` from
+  `.vscode/settings.json` (plus `.eddie.json`, `EDDIE_DOC_*`, `--set`), offers
+  `--json` throughout, and asks before changing the manuscript (`--yes` in scripts).
+  `map`, `stamp --review` and `anchor --review` behave as before.
+- **`eddie tui`**: a full-screen terminal browser over documents → mappings →
+  annotations, showing comment, source lines and replies for the selected remark;
+  single keys resolve, confirm, reply, link, triage, re-match, fix and apply.
+  `eddie rounds` with no argument lists every mapping in the workspace.
+- **npm package `@eddie-doc/cli`**, with no runtime dependencies, installing `eddie` and
+  `eddie-doc`, and a full reference README (`packages/cli/README.md`).
+- **The CLI ships in the extension.** `eddie` is on the PATH of integrated terminals
+  (`eddieDoc.cli.addToTerminalPath`) and runs on VS Code's runtime. New commands:
+  *Install 'eddie' Command in PATH*, *Open Terminal with Eddie CLI*.
+
+### Changed
+
+- VS Code re-reads a `.review.json` changed on disk, by the CLI, a sync client or
+  another editor, so the tree reflects it without a reload.
+- pdf.js's polyfill warnings no longer print on every CLI run; set `EDDIE_DEBUG=1` to
+  see them.
+
 ## [1.4.4] - 2026-10-05
 
 Obsidian plugin, fixes from the community directory's lint review of 1.4.3:

@@ -53,6 +53,13 @@ import { PdfPreviewPanel } from "./ui/pdfPreview.js";
 import { isSessionStale, renderReport } from "../../core/model/report.js";
 import { stripMarkers } from "../../core/source/markers.js";
 import {
+  exposeOnTerminalPath,
+  installCliFiles,
+  installOnShellPath,
+  openCliTerminal,
+  type CliInstall,
+} from "./cli.js";
+import {
   ReviewCommentController,
   type ReviewComment,
 } from "./ui/comments.js";
@@ -391,6 +398,63 @@ export function activate(context: vscode.ExtensionContext): void {
         remapTimers.clear();
       },
     }
+  );
+
+  // ---- The bundled `eddie` CLI ---------------------------------------------
+
+  let cli: CliInstall | undefined;
+  try {
+    cli = installCliFiles(context);
+    if (cli) exposeOnTerminalPath(context, cli);
+  } catch (e) {
+    console.warn(`Eddie Doc: could not set up the eddie CLI — ${String(e)}`);
+  }
+  const needCli = (): CliInstall | undefined => {
+    if (!cli) {
+      vscode.window.showErrorMessage("Eddie Doc: the bundled CLI is missing from this install.");
+    }
+    return cli;
+  };
+  context.subscriptions.push(
+    vscode.commands.registerCommand("eddieDoc.installCli", async () => {
+      const c = needCli();
+      if (c) await installOnShellPath(c);
+    }),
+    vscode.commands.registerCommand("eddieDoc.openCliTerminal", () => {
+      const c = needCli();
+      if (c) openCliTerminal(c);
+    }),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (cli && e.affectsConfiguration("eddieDoc.cli.addToTerminalPath")) {
+        exposeOnTerminalPath(context, cli);
+      }
+    })
+  );
+
+  // A sidecar written outside this window — by `eddie` in a terminal, a sync
+  // client or another editor — is re-read once its writes settle, so the tree
+  // shows what is on disk. The store recognises the echo of its own writes, and
+  // keeps unsaved work, which its next write reconciles with the file.
+  const sidecarTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const syncSidecar = (uri: vscode.Uri) => {
+    const file = uri.fsPath;
+    const t = sidecarTimers.get(file);
+    if (t) clearTimeout(t);
+    sidecarTimers.set(
+      file,
+      setTimeout(() => {
+        sidecarTimers.delete(file);
+        void store.reloadFromDisk(file).catch(() => undefined);
+      }, 300)
+    );
+  };
+  const sidecarWatcher = vscode.workspace.createFileSystemWatcher("**/*.review.json");
+  context.subscriptions.push(
+    sidecarWatcher,
+    sidecarWatcher.onDidChange(syncSidecar),
+    sidecarWatcher.onDidCreate(syncSidecar),
+    sidecarWatcher.onDidDelete(syncSidecar),
+    { dispose: () => sidecarTimers.forEach((t) => clearTimeout(t)) }
   );
 
   // ---- Commands -----------------------------------------------------------
