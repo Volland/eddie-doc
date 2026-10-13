@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-10-13
+
 ### Added
 
 - **`eddie` CLI with every VS Code command.** `open`, `append`, `merge`, `rounds`,
