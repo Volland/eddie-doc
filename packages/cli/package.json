@@ -1,6 +1,6 @@
 {
   "name": "@eddie-doc/cli",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Map an editor's PDF annotations back onto your AsciiDoc source from the command line: highlights, strikeouts, comments and inserts become tracked, resolvable review items. The CLI of the Eddie Doc VS Code extension and Obsidian plugin.",
   "license": "MIT",
   "author": "Volodymyr Pavlyshyn",
