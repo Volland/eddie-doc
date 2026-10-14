@@ -577,7 +577,8 @@ eddie skills                             # teach Claude Code, Codex, Cursor… t
 (or `eddie skills`) asks which tools you use (Claude Code, Codex, Cursor, Gemini
 CLI, Copilot, others) and installs three Agent Skills where each one looks:
 `eddie-review` (work through remarks), `eddie-anchors` (keep `// eddie:` lines
-intact) and `eddie-pipeline` (rounds, reports, stamping, CI).
+intact) and `eddie-pipeline` (rounds, reports, stamping, CI). How Claude Code and
+other agents use them: <https://volland.github.io/eddie-doc/agents.html>.
 
 The full command reference, configuration, JSON output and CI recipes are in
 [packages/cli/README.md](packages/cli/README.md), which is also the npm

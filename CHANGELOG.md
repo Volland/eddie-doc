@@ -15,6 +15,9 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   account, then installs into the fewest folders those tools read (`.claude/skills`,
   `.agents/skills`). `--tool`/`--scope` for scripts; `list`, `remove`, `show`.
   Installed skills are versioned, and a same-named skill you wrote is never touched.
+- Website: a new [AI agents](https://volland.github.io/eddie-doc/agents.html) page on
+  using Eddie with Claude Code, Codex, Cursor, Gemini CLI and Copilot; the home page
+  announces the skills; the pages now fit phone screens.
 - The same installer as **Install Agent Skills for AI Tools…** in VS Code, **Install
   agent skills for AI tools…** in Obsidian (into the vault), and the `S` key in `eddie tui`.
 

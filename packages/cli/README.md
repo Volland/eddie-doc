@@ -678,6 +678,9 @@ that you wrote is never replaced (unless `--force`) and never removed. Without
 `--tool` and without a terminal, Eddie installs for the tools it detects, and
 fails with a usage error if there are none.
 
+How Claude Code and other agents then use Eddie, with example prompts:
+<https://volland.github.io/eddie-doc/agents.html>.
+
 The same installer is in the editors: **Eddie Doc: Install Agent Skills for AI
 Tools…** in VS Code, **Install agent skills for AI tools…** in Obsidian (into the
 vault), and the `S` key in `eddie tui`.

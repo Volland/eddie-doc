@@ -28,6 +28,7 @@
     <a class="link" href="index.html#install">Install</a>
     <a class="link" href="index.html#features">Features</a>
     <a class="link" href="index.html#how">How it works</a>
+    <a class="link" href="agents.html">AI agents</a>
     <a class="link" href="format.html">Review Format</a>
     <a class="link" href="support.html">Support</a>
     <a class="link gh" href="https://github.com/Volland/eddie-doc">GitHub</a>
@@ -51,7 +52,11 @@
         </g>
       </svg>
     </div>
-    <span class="tag">VS Code extension &middot; Obsidian plugin</span>
+    <a class="announce" href="agents.html">
+      <span class="new">New</span>
+      <span>Agent Skills: Claude Code, Codex, Cursor, Gemini CLI and Copilot can now work through your editor's remarks →</span>
+    </a>
+    <span class="tag">VS Code extension &middot; Obsidian plugin &middot; CLI &middot; AI agents</span>
     <h1>Turn an editor's annotated PDF back into source edits.</h1>
     <p class="lead">
       You write in AsciiDoc, ship a PDF, and get it back covered in highlights,
@@ -62,6 +67,7 @@
     <div class="cta">
       <a class="btn primary" href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">Install from Marketplace</a>
       <a class="btn" href="#obsidian">Obsidian plugin</a>
+      <a class="btn" href="agents.html">Use it with AI agents</a>
       <a class="btn" href="format.html">Read the Review Format →</a>
     </div>
   </div>
@@ -92,7 +98,7 @@
 <section id="install">
   <div class="wrap">
     <h2>Works in</h2>
-    <p class="sub">Two places, one shared core and one review format.</p>
+    <p class="sub">Two editors, a command line and your AI agent: one shared core and one review format.</p>
     <div class="grid">
       <div class="card">
         <h3><span class="ic">▣</span> VS Code</h3>
@@ -106,8 +112,13 @@
       </div>
       <div class="card">
         <h3><span class="ic">›_</span> Command line</h3>
-        <p>Extract, map, report, stamp and strip anchors without an editor. It reads and writes the same review files.</p>
-        <p><a href="https://github.com/Volland/eddie-doc#readme">See the README</a></p>
+        <p><code>eddie</code> runs every editor command from a terminal or a build script, with <code>--json</code> output and a full-screen <code>eddie tui</code>. It is bundled with the VS Code extension, or <code>npm install -g @eddie-doc/cli</code>.</p>
+        <p><a href="https://github.com/Volland/eddie-doc/blob/main/packages/cli/README.md">CLI reference</a> &middot; <a href="https://www.npmjs.com/package/@eddie-doc/cli">npm</a></p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">✦</span> AI coding agents</h3>
+        <p>Agent Skills teach Claude Code, Codex, Cursor, Gemini CLI and Copilot to work through the remarks: read each in context, edit, reply, resolve, and keep the review anchors intact. Install them with <code>eddie skills</code>.</p>
+        <p><a href="agents.html">How agents use Eddie →</a></p>
       </div>
     </div>
   </div>
@@ -247,6 +258,7 @@
     <span>Eddie Doc — AsciiDoc PDF Review</span>
     <span class="spacer"></span>
     <a href="https://github.com/Volland/eddie-doc">GitHub</a>
+    <a href="agents.html">AI agents</a>
     <a href="format.html">Review Format</a>
     <a href="schema/review-v2.schema.json">Schema</a>
     <a href="https://docs.google.com/forms/d/1zQy3r-zHAQTmeQBueK37tWnyrzWk8j92IAefOiLAaCk/viewform">Survey</a>

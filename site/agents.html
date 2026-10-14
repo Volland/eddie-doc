@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eddie Doc for AI agents — Claude Code, Codex, Cursor, Gemini CLI, Copilot</title>
+<meta name="description" content="Eddie Doc ships Agent Skills and a scriptable CLI so Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot and other coding agents can work through an editor's PDF review of your AsciiDoc manuscript.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M4.2 3.8 C4.2 8.2 4 9.4 5 12.4 C6 17.4 9 20 12 20 C15 20 18 17.4 19 12.4 C20 9.4 19.8 8.2 19.8 3.8 L15 6.8 C13 6 11 6 9 6.8 Z"/>
+        <path d="M7.3 10.7 Q8.5 9.3 9.7 10.2 Q8.5 11.3 7.3 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M16.7 10.7 Q15.5 9.3 14.3 10.2 Q15.5 11.3 16.7 10.7 Z" fill="currentColor" stroke="none"/>
+        <path d="M9.4 12.7 L14.6 12.7 C13.6 16.5 12 19.3 12 19.3 C12 19.3 10.4 16.5 9.4 12.7 Z"/>
+        <line x1="12" y1="14.7" x2="12" y2="18.5"/>
+        <circle cx="12" cy="13.8" r="0.72" fill="currentColor" stroke="none"/>
+        <path d="M8.7 14.4 L3.9 13.9 M8.9 15.9 L4.4 16.9 M15.3 14.4 L20.1 13.9 M15.1 15.9 L19.6 16.9"/>
+      </svg>
+      Eddie Doc
+    </a>
+    <span class="spacer"></span>
+    <a class="link" href="index.html">Home</a>
+    <a class="link" href="agents.html">AI agents</a>
+    <a class="link" href="format.html">Review Format</a>
+    <a class="link" href="support.html">Support</a>
+    <a class="link gh" href="https://github.com/Volland/eddie-doc">GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="tag">New in Eddie Doc &middot; Agent Skills</span>
+    <h1>Let your coding agent work through the editor's remarks.</h1>
+    <p class="lead">
+      Eddie Doc now ships <b>Agent Skills</b>, plus a command line that does everything
+      the editor plugins do. Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot and
+      other agents can read every remark in its source context, edit the
+      <code>.adoc</code>, reply to the editor and mark the remark resolved. All of it
+      goes into the same review files you see in VS Code and Obsidian.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Install the skills</a>
+      <a class="btn" href="#claude-code">Claude Code</a>
+      <a class="btn" href="#other-agents">Other agents</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="skills">
+  <div class="wrap">
+    <h2>Three skills</h2>
+    <p class="sub">Each one is a folder with a <code>SKILL.md</code> in the open <a href="https://agentskills.io">Agent Skills</a> format. An agent loads a skill when your request matches it.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">✎</span> eddie-review</h3>
+        <p>The remark loop: list what is open, read each remark next to the lines it marks, edit, reply, resolve. It applies the editor's mechanical edits, places unmatched marks, and comes with a full command reference.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⚓</span> eddie-anchors</h3>
+        <p>The rules for <code>// eddie:</code> marker lines. They keep every mark attached to its paragraph however much the prose is rewritten, so an agent must carry them through untouched.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⇄</span> eddie-pipeline</h3>
+        <p>The round trip: map a newly returned annotated PDF, start a new round, export the report, stamp the answers into a fresh <code>asciidoctor-pdf</code> render, and gate CI on open remarks.</p>
+      </div>
+    </div>
+    <div class="callout">
+      The skills also tell the agent where to stop. It must not resolve a remark it did not
+      address. It replies when it disagrees, leaves decisions that need you open, never
+      hand-edits review files, and asks before applying edits in bulk or deleting review state.
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install the skills</h2>
+    <p class="sub">Eddie asks which tools you use, then writes the skills where each one looks.</p>
+<pre><code><span class="tok-com"># the CLI: npm install -g @eddie-doc/cli, or the copy bundled with the VS Code extension</span>
+$ eddie skills
+Which AI coding tools do you use? Eddie's skills will be installed where each one looks.
+  1) Claude Code   (found here)
+  2) OpenAI Codex
+  3) Cursor
+  4) Gemini CLI
+  5) GitHub Copilot
+  6) Other (any tool that reads .agents/skills: OpenCode, Amp, Kiro…)
+Numbers separated by commas, or "a" for all [1]: <b>1,3</b>
+Install for:
+  p) this project — /work/book   (commit them so collaborators get them)
+  u) your user account — /Users/me   (every project on this machine)
+p or u [p]: <b>p</b>
+.claude/skills
+  installed eddie-review
+  installed eddie-anchors
+  installed eddie-pipeline</code></pre>
+    <div class="two">
+      <div>
+        <h3>Or from where you already are</h3>
+        <ul>
+          <li><b>VS Code:</b> <i>Eddie Doc: Install Agent Skills for AI Tools…</i> (command palette or the review view's menu)</li>
+          <li><b>Obsidian:</b> <i>Install agent skills for AI tools…</i> (installs into the vault)</li>
+          <li><b>Terminal UI:</b> press <code>S</code> in <code>eddie tui</code></li>
+          <li><b>Scripts:</b> <code>eddie skills install --tool claude,codex --scope project</code></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Keeping them current</h3>
+        <ul>
+          <li><code>eddie skills list</code> shows what is installed, where, and which version.</li>
+          <li>Run <code>eddie skills</code> again after upgrading to update them.</li>
+          <li>A skill of the same name that you wrote yourself is never replaced or removed.</li>
+          <li><code>eddie skills remove</code> takes Eddie's skills out again.</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Where they go</h3>
+    <p class="muted">Eddie writes the fewest copies that reach every tool you pick. Claude Code plus Cursor needs one copy; Claude Code plus Codex needs two.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Tool</th><th>Project folder</th><th>For your account</th></tr>
+        <tr><td>Claude Code</td><td><code>.claude/skills</code></td><td><code>~/.claude/skills</code></td></tr>
+        <tr><td>OpenAI Codex</td><td><code>.agents/skills</code></td><td><code>~/.agents/skills</code></td></tr>
+        <tr><td>Cursor</td><td><code>.agents/skills</code> (also reads <code>.claude/</code>, <code>.cursor/</code>, <code>.codex/skills</code>)</td><td>same under <code>~</code></td></tr>
+        <tr><td>Gemini CLI</td><td><code>.agents/skills</code> or <code>.gemini/skills</code></td><td>same under <code>~</code></td></tr>
+        <tr><td>GitHub Copilot</td><td><code>.agents/skills</code> (also <code>.github/</code>, <code>.claude/skills</code>)</td><td><code>~/.agents/skills</code> or <code>~/.copilot/skills</code></td></tr>
+        <tr><td>Others (OpenCode, Amp, Kiro…)</td><td><code>.agents/skills</code></td><td><code>~/.agents/skills</code></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="claude-code">
+  <div class="wrap">
+    <h2>Using Eddie with Claude Code</h2>
+    <p class="sub">Claude Code picks up skills from <code>.claude/skills</code> and uses one when your request matches it.</p>
+    <ol class="steps">
+      <li><b>Map the editor's PDF</b>, in the editor or the terminal: <code>eddie open ch04.adoc ~/Downloads/ch04-acme.pdf --origin Acme</code>. You can also ask Claude to do it; the <code>eddie-pipeline</code> skill covers it.</li>
+      <li><b>Install the skills</b> with <code>eddie skills</code> and pick Claude Code. Commit <code>.claude/skills</code> so everyone on the book gets them.</li>
+      <li><b>Let it run <code>eddie</code> without asking each time.</b> Add this to <code>.claude/settings.json</code>:
+<pre><code>{
+  <span class="tok-key">"permissions"</span>: {
+    <span class="tok-key">"allow"</span>: [<span class="tok-str">"Bash(eddie *)"</span>]
+  }
+}</code></pre>
+        Commands that change the manuscript in bulk (<code>apply</code>) or delete review state still need <code>--yes</code>, and the skill tells Claude to ask you first.
+      </li>
+      <li><b>Ask for the work in plain words:</b></li>
+    </ol>
+    <div class="prompt">Work through the open copyedit remarks on <code>manuscript/ch04.adoc</code>. Fix what you agree with, reply to everything else, and leave anything that needs my decision open.</div>
+    <div class="prompt">Show me the confident mechanical edits from the editor's PDF on chapter 4 before applying them.</div>
+    <div class="prompt">Rewrite section 2 of ch04 for flow. Don't lose the review anchors.</div>
+    <div class="prompt">The editor sent chapter 5 back. Map <code>~/Downloads/ch05-acme.pdf</code> as a new round and tell me what changed since the last one.</div>
+    <h3>What Claude does</h3>
+    <p>For the first prompt, Claude follows <code>eddie-review</code>. It runs <code>eddie list ch04.adoc --bucket open,review --json</code> and, for each remark, <code>eddie show … --json</code>, then reads the lines it points at and edits the prose, keeping every <code>// eddie:</code> line in place as <code>eddie-anchors</code> requires. It then runs <code>eddie reply</code> and <code>eddie resolve</code>. Its summary tells you what it resolved, what it answered but left open, and what it could not place. Each step lands in the review file, so the VS Code tree, the Obsidian panel and the stamped PDF all show it.</p>
+    <p>You can also invoke a skill directly, for example <code>/eddie-review</code>, or run Claude headless in a script: <code>claude -p "Answer the open remarks on ch04.adoc"</code>.</p>
+    <div class="callout">
+      <b>Watch it happen.</b> With the VS Code extension installed, <code>eddie</code> is on the
+      PATH of every integrated terminal and the review tree reloads whenever a review file
+      changes. Run Claude Code in that terminal and watch remarks move to <i>Resolved</i>
+      as it works.
+    </div>
+  </div>
+</section>
+
+<section id="other-agents">
+  <div class="wrap">
+    <h2>Other coding agents</h2>
+    <p class="sub">Every tool here loads the same skills. Only the folder differs, and <code>eddie skills</code> takes care of that.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">◎</span> OpenAI Codex</h3>
+        <p>Reads <code>.agents/skills</code> in the repository (and <code>~/.agents/skills</code>). Run <code>codex</code> in the manuscript repo and ask it to work through the remarks; it picks the skill from its description, or you can name the skill in your prompt.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">▣</span> Cursor</h3>
+        <p>Its agent loads skills from <code>.agents/skills</code>, and also from <code>.claude/skills</code>, so one install serves Cursor and Claude Code. Ask in the agent chat; it runs <code>eddie</code> in Cursor's terminal.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">✦</span> Gemini CLI</h3>
+        <p>Reads <code>.agents/skills</code> or <code>.gemini/skills</code>, in the project or your home folder. Start <code>gemini</code> in the repo and ask as you would ask Claude.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⌘</span> GitHub Copilot</h3>
+        <p>Agent mode in VS Code and the Copilot coding agent read <code>.agents/skills</code>, <code>.github/skills</code> or <code>.claude/skills</code>. For the cloud agent, install the CLI in <code>.github/workflows/copilot-setup-steps.yml</code> (<code>npm install -g @eddie-doc/cli</code>) so it has <code>eddie</code>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">…</span> OpenCode, Amp, Kiro and others</h3>
+        <p>Any agent that supports the Agent Skills standard reads <code>.agents/skills</code>. Choose <i>Other</i> in <code>eddie skills</code>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">›_</span> Agents without skills</h3>
+        <p>Any agent that can run shell commands can still use Eddie. Point it at <code>eddie help</code> and <code>--json</code>, and paste the anchor rules from <a href="https://github.com/Volland/eddie-doc/blob/main/docs/MANUSCRIPT-CLAUDE.md">MANUSCRIPT-CLAUDE.md</a> into its <code>AGENTS.md</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="why-cli">
+  <div class="wrap">
+    <h2>Why it works well for agents</h2>
+    <p class="sub">The CLI was built to be scripted, not just to be typed.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">{ }</span> JSON everywhere</h3>
+        <p>Every reading command takes <code>--json</code>. Results go to stdout and messages to stderr. Exit codes: 0 done, 1 failed, 2 wrong usage.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">#</span> Stable remark numbers</h3>
+        <p>A remark is <code>#7</code> for good, across re-maps, reports and rounds. An agent and the editor refer to the same thing.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⚑</span> Safe by default</h3>
+        <p>Bulk edits to the manuscript and deletions of review state ask first and need <code>--yes</code> when no one is at the terminal. <code>--dry-run</code> shows the plan.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⇆</span> One source of truth</h3>
+        <p>The agent writes the same review files the editors read, so you can stop it at any point and carry on by hand in VS Code, Obsidian or <code>eddie tui</code>.</p>
+      </div>
+    </div>
+    <div class="cta" style="margin-top:24px">
+      <a class="btn primary" href="https://www.npmjs.com/package/@eddie-doc/cli">@eddie-doc/cli on npm</a>
+      <a class="btn" href="https://github.com/Volland/eddie-doc/blob/main/packages/cli/README.md">CLI reference</a>
+      <a class="btn" href="https://marketplace.visualstudio.com/items?itemName=pavlyshyn.eddie-doc">VS Code extension</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Eddie Doc — AsciiDoc PDF Review</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/Volland/eddie-doc">GitHub</a>
+    <a href="agents.html">AI agents</a>
+    <a href="format.html">Review Format</a>
+    <a href="support.html">Support</a>
+  </div>
+</footer>
+
+</body>
+</html>
