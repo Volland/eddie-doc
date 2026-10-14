@@ -5,6 +5,19 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Agent Skills for AI coding tools.** Three skills: `eddie-review` (work through an
+  editor's remarks with `eddie`), `eddie-anchors` (keep `// eddie:` lines intact when
+  editing `.adoc`) and `eddie-pipeline` (map PDFs, rounds, reports, stamping, CI).
+- **`eddie skills`** asks which tools you use (Claude Code, Codex, Cursor, Gemini CLI,
+  Copilot, others; detected ones preselected) and whether for the project or your
+  account, then installs into the fewest folders those tools read (`.claude/skills`,
+  `.agents/skills`). `--tool`/`--scope` for scripts; `list`, `remove`, `show`.
+  Installed skills are versioned, and a same-named skill you wrote is never touched.
+- The same installer as **Install Agent Skills for AI Tools…** in VS Code, **Install
+  agent skills for AI tools…** in Obsidian (into the vault), and the `S` key in `eddie tui`.
+
 ## [1.4.5] - 2026-10-13
 
 ### Added

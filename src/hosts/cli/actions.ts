@@ -2,7 +2,7 @@
  * Operations shared by the CLI's one-shot commands and its interactive TUI, so
  * both write a report to the same place and open files the same way.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmdirSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import * as path from "node:path";
 import { isSessionStale, renderReport } from "../../core/model/report.js";
@@ -78,4 +78,22 @@ export function openFile(target: string): void {
         ? ["cmd", ["/c", "start", "", target]]
         : ["xdg-open", [target]];
   spawn(cmd, args as string[], { detached: true, stdio: "ignore" }).unref();
+}
+
+// -- agent skills ---------------------------------------------------------------
+
+/** Remove empty skill folders left behind by {@link removeSkills}. */
+export function tidySkillFolders(files: string[]): void {
+  const dirs = [...new Set(files.map((f) => path.dirname(f)))].sort((a, b) => b.length - a.length);
+  for (const d of dirs) {
+    for (let cur = d; ; cur = path.dirname(cur)) {
+      if (/[\\/]\.?[a-z]+[\\/]skills$/i.test(cur)) break; // never remove a tool's skills folder itself
+      try {
+        if (readdirSync(cur).length) break;
+        rmdirSync(cur);
+      } catch {
+        break;
+      }
+    }
+  }
 }

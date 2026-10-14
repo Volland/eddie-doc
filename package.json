@@ -29,7 +29,10 @@
     "editing",
     "proofreading",
     "adoc",
-    "cli"
+    "cli",
+    "ai",
+    "claude",
+    "agent skills"
   ],
   "galleryBanner": {
     "color": "#2f6feb",
@@ -219,6 +222,11 @@
         "command": "eddieDoc.openCliTerminal",
         "title": "Eddie Doc: Open Terminal with Eddie CLI",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "eddieDoc.installSkills",
+        "title": "Eddie Doc: Install Agent Skills for AI Tools…",
+        "icon": "$(sparkle)"
       }
     ],
     "viewsContainers": {
@@ -336,6 +344,11 @@
           "command": "eddieDoc.openCliTerminal",
           "when": "view == eddieDoc.annotations",
           "group": "3_storage@2"
+        },
+        {
+          "command": "eddieDoc.installSkills",
+          "when": "view == eddieDoc.annotations",
+          "group": "3_storage@3"
         }
       ],
       "view/item/context": [
@@ -568,6 +581,9 @@
         },
         {
           "command": "eddieDoc.openCliTerminal"
+        },
+        {
+          "command": "eddieDoc.installSkills"
         }
       ]
     },

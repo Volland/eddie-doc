@@ -1,5 +1,5 @@
 import * as assert from "node:assert";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { runCli } from "../hosts/cli/run.js";
@@ -52,7 +52,7 @@ async function mapped() {
   assert.strictEqual(code, 0);
   const fresh = () => new Workspace({ root, loaded: loadSettings(root, [], {}), author: "Tester" }, io);
   const app = async (arg?: string) => {
-    const a = new TuiApp(fresh(), { open: () => undefined });
+    const a = new TuiApp(fresh(), { open: () => undefined, home: path.join(root, "home") });
     await a.start(arg);
     return a;
   };
@@ -162,5 +162,27 @@ describe("CLI terminal UI", () => {
     for (const k of ["resolve / reopen", "add a reply", "apply every confident edit", "export the mapping's report"]) {
       assert.ok(f.includes(k), `help lacks ${k}`);
     }
+  });
+
+  it("asks which AI tools are in use and installs the skills where they look", async () => {
+    const app = await ws.app(ws.adoc);
+    assert.match(frame(app), /press S to install agent skills/);
+    await app.key(K.ch("S"));
+    let f = frame(app);
+    assert.match(f, /Which AI coding tools do you use\?/);
+    assert.match(f, /\[x\] Claude Code/, "nothing detected: Claude Code is the default");
+    assert.match(f, /\[ \] Cursor/);
+    await app.key(K.down);
+    await app.key(K.down);
+    await app.key({ name: "space", sequence: " " }); // tick Cursor
+    assert.match(frame(app), /\[x\] Cursor/);
+    await app.key({ name: "end" });
+    await app.key(K.enter); // Continue →
+    assert.match(frame(app), /This project/);
+    assert.match(frame(app), /My user account/);
+    await app.key(K.enter); // this project
+    assert.match(frame(app), /skills installed\/updated \(3\) in \.claude\/skills/);
+    assert.ok(existsSync(path.join(ws.root, ".claude/skills/eddie-review/SKILL.md")));
+    assert.ok(!existsSync(path.join(ws.root, ".agents")), "Cursor reads .claude/skills too: one copy");
   });
 });

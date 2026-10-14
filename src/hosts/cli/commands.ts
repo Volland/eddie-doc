@@ -8,12 +8,14 @@
  * CLI asks on a terminal and requires `--yes` when there is no one to ask.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { all, has, list, num, str, UsageError, type ArgSpec, type ParsedArgs } from "./args.js";
 import { CliError, Workspace, type Io } from "./workspace.js";
 import { openFile, outputPath, renderSessionReport, writeReport } from "./actions.js";
 import { TuiApp } from "./tui/app.js";
 import { runTerminal } from "./tui/term.js";
+import { skillsCommand } from "./skills.js";
 import { clip, countsText, itemJson, itemLabel, itemRow, line1, mappingJson } from "./present.js";
 import type { LoadedSettings } from "./config.js";
 import { extractAnnotations, readPages } from "../../core/pdf/extract.js";
@@ -1397,7 +1399,7 @@ const tui: Command = {
       throw new CliError("tui needs an interactive terminal — use list/show/rounds in scripts");
     }
     const ws = ctx.ws();
-    const app = new TuiApp(ws, { color: !process.env.NO_COLOR });
+    const app = new TuiApp(ws, { color: !process.env.NO_COLOR, home: os.homedir() });
     await app.start(ctx.args.positional[0]);
     // Store notices would scribble over the screen; show them in the footer.
     const note = ctx.io.note;
@@ -1452,7 +1454,7 @@ export const COMMANDS: Command[] = [
   listCmd, show, resolve, reopen, confirmCmd, relink, remapItem, triage, reply, preview,
   applyCmd, fix, anchor, strip,
   report, stamp, extract, map,
-  status, tui, folder, migrate, config, version,
+  status, tui, skillsCommand, folder, migrate, config, version,
 ];
 
 export function findCommand(name: string): Command | undefined {

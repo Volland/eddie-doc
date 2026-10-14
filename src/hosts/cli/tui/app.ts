@@ -48,6 +48,16 @@ import {
 } from "../../../core/model/types.js";
 import { itemLabel, line1 } from "../present.js";
 import { openFile, writeReport } from "../actions.js";
+import { PRODUCER } from "../../../core/model/format.js";
+import { eddieSkills } from "../../../core/skills/content.js";
+import {
+  AGENT_TOOLS,
+  detectTools,
+  findInstalled,
+  installSkills,
+  skillTargets,
+  type SkillScope,
+} from "../../../core/skills/install.js";
 import type { Workspace } from "../workspace.js";
 
 /** A key as Node's readline `keypress` event reports it. */
@@ -86,6 +96,8 @@ export interface MenuOption {
   label: string;
   hint?: string;
   run?: () => Promise<void> | void;
+  /** A checkbox: Enter or Space toggles it and the menu stays open. */
+  checked?: boolean;
 }
 interface MenuView extends ListState {
   kind: "menu";
@@ -115,6 +127,7 @@ const HELP: Array<[string, string]> = [
   ["Enter  →", "open"],
   ["Esc  ←  Backspace", "back"],
   ["q  Ctrl-C", "quit"],
+  ["S", "install agent skills for your AI tools"],
   ["", ""],
   ["Annotations", ""],
   ["Enter", "replies (link it, if unmatched)"],
@@ -142,6 +155,8 @@ export interface TuiOptions {
   color?: boolean;
   /** How to open a file; injected so tests do not launch a viewer. */
   open?: (file: string) => void;
+  /** The user's home, for user-scope skills; absent hides that choice. */
+  home?: string;
 }
 
 export class TuiApp {
@@ -175,11 +190,18 @@ export class TuiApp {
 
   /** Open on one document, or on every reviewed document in the workspace. */
   async start(adocArg?: string): Promise<void> {
-    if (adocArg) return this.openDoc(await this.ws.requireDoc(adocArg), true);
-    await this.ws.loadAll();
-    this.stack.push({ kind: "docs", cursor: 0, scroll: 0 });
-    // One document: nothing to choose at this level.
-    if (this.docs().length === 1) this.openDoc(this.docs()[0].adoc, true);
+    if (adocArg) this.openDoc(await this.ws.requireDoc(adocArg), true);
+    else {
+      await this.ws.loadAll();
+      this.stack.push({ kind: "docs", cursor: 0, scroll: 0 });
+      // One document: nothing to choose at this level.
+      if (this.docs().length === 1) this.openDoc(this.docs()[0].adoc, true);
+    }
+    const skills = eddieSkills(PRODUCER.version);
+    const found = await findInstalled(this.ws.storage, skills, { project: this.ws.opts.root, user: this.opts.home });
+    if (!found.some((f) => f.version !== "foreign")) {
+      this.flash("Tip: press S to install agent skills so Claude Code, Codex, Cursor… know how to use eddie");
+    }
   }
 
   /** Show a one-line notice in the footer until the next key. */
@@ -338,6 +360,7 @@ export class TuiApp {
         HELP.map(([key, what]) => ({ label: key ? `${key.padEnd(18)} ${what}` : what ? what : "" }))
       );
     }
+    if (ch === "S") return this.skillsFlow();
     const enter = k.name === "return" || k.name === "enter" || k.name === "right";
 
     switch (v.kind) {
@@ -352,6 +375,10 @@ export class TuiApp {
         return this.itemsKey(v, ch, enter);
       case "menu": {
         const opt = v.options[v.cursor];
+        if ((enter || k.name === "space") && opt?.checked !== undefined) {
+          opt.checked = !opt.checked;
+          return;
+        }
         if (enter && opt?.run) {
           this.stack.pop();
           await opt.run();
@@ -480,6 +507,56 @@ export class TuiApp {
         return this.flash(`opened ${path.basename(pdf)} — page ${it.page}`);
       }
     }
+  }
+
+  /** Ask which AI tools are in use and where, then install the skills there. */
+  private async skillsFlow(): Promise<void> {
+    const root = this.ws.opts.root;
+    const detected = await detectTools(this.ws.storage, root, this.opts.home);
+    const boxes: MenuOption[] = AGENT_TOOLS.map((t) => ({
+      label: t.label,
+      hint: detected.includes(t.id) ? "found here" : undefined,
+      checked: detected.includes(t.id),
+    }));
+    if (!detected.length) boxes[0].checked = true;
+    const chosen = () => AGENT_TOOLS.filter((_, i) => boxes[i].checked).map((t) => t.id);
+    const install = async (scope: SkillScope) => {
+      const tools = chosen();
+      const base = scope === "project" ? root : this.opts.home!;
+      const targets = skillTargets(tools, scope, base);
+      const out = await installSkills(this.ws.storage, targets, eddieSkills(PRODUCER.version));
+      const changed = out.filter((o) => o.status === "installed" || o.status === "updated").length;
+      const skipped = out.filter((o) => o.status === "skipped").length;
+      const where = targets.map((t) => (scope === "project" ? this.rel(t.dir) : "~/" + path.relative(base, t.dir))).join(", ");
+      this.flash(
+        `skills ${changed ? `installed/updated (${changed})` : "already up to date"} in ${where}` +
+          (skipped ? ` · ${skipped} skipped: a skill of that name is not Eddie's` : ""),
+        skipped > 0
+      );
+    };
+    this.menu(
+      "Which AI coding tools do you use?",
+      [
+        ...boxes,
+        {
+          label: "Continue →",
+          run: () => {
+            if (!chosen().length) return this.flash("tick at least one tool", true);
+            const scopes: MenuOption[] = [
+              { label: `This project — ${root}`, hint: "commit it so collaborators get it", run: () => install("project") },
+            ];
+            if (this.opts.home) {
+              scopes.push({ label: `My user account — ${this.opts.home}`, hint: "every project on this machine", run: () => install("user") });
+            }
+            this.menu("Install the skills for…", scopes);
+          },
+        },
+      ],
+      [
+        [["Eddie installs three skills: eddie-review, eddie-anchors, eddie-pipeline.", this.st.dim]],
+        [["Claude Code reads .claude/skills; Codex, Gemini, Cursor, Copilot share .agents/skills.", this.st.dim]],
+      ]
+    );
   }
 
   private replyPrompt(v: ItemsView, it: ReviewItem): void {
@@ -717,7 +794,9 @@ export class TuiApp {
         : v.kind === "mappings"
           ? "Enter annotations  R re-map  p report  ? keys  ← back  q quit"
           : v.kind === "menu"
-            ? "Enter choose  Esc cancel"
+            ? v.options.some((o) => o.checked !== undefined)
+              ? "Space/Enter tick  ↓ Continue  Esc cancel"
+              : "Enter choose  Esc cancel"
             : "Enter open  ? keys  q quit";
     return this.st.dim(fit(` ${hints}`, cols));
   }
@@ -766,7 +845,11 @@ export class TuiApp {
           ];
         });
       case "menu":
-        return v.options.map((o) => [[o.label], [o.hint ? `  ${o.hint}` : "", this.st.dim]]);
+        return v.options.map((o) => [
+          [o.checked === undefined ? "" : o.checked ? "[x] " : "[ ] ", this.st.green],
+          [o.label],
+          [o.hint ? `  ${o.hint}` : "", this.st.dim],
+        ]);
     }
   }
 

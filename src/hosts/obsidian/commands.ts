@@ -1,7 +1,9 @@
 import { MarkdownView, Notice, Platform } from "obsidian";
 import type EddiePlugin from "./main.js";
 import * as f from "./flows.js";
-import { prompt } from "./ui/modals.js";
+import { checklist, prompt } from "./ui/modals.js";
+import { eddieSkills } from "../../core/skills/content.js";
+import { AGENT_TOOLS, detectTools, installSkills, skillTargets } from "../../core/skills/install.js";
 import { isAdocPath } from "../../core/util/adoc.js";
 
 /**
@@ -94,8 +96,47 @@ export function registerCommands(plugin: EddiePlugin): void {
   add("anchor-source", "Anchor annotations in source", () => f.anchorSource(plugin), hasReview);
   add("strip-anchors", "Remove source anchors", () => f.stripAnchors(plugin), hasReview);
 
+  add("install-agent-skills", "Install agent skills for AI tools…", () => installAgentSkills(plugin));
   add("set-author-name", "Set your name for replies", async () => {
     const name = await prompt(plugin.app, "Your name on replies", { value: plugin.settings.authorName });
     if (name !== undefined) await plugin.updateSettings({ authorName: name.trim() });
   });
+}
+
+/**
+ * Ask which AI coding tools the author uses, then write Eddie Doc's Agent Skills
+ * into the vault where those tools look (`.claude/skills`, `.agents/skills`). The
+ * vault is the project: a tool opened on the vault folder finds them. There is no
+ * user-wide option here, because a plugin cannot reach the home folder on mobile.
+ */
+async function installAgentSkills(plugin: EddiePlugin): Promise<void> {
+  const storage = plugin.host.storage;
+  const detected = await detectTools(storage, "");
+  const picked = await checklist(
+    plugin.app,
+    "Which AI coding tools do you use?",
+    "Eddie Doc installs three skills (eddie-review, eddie-anchors, eddie-pipeline) into this vault, " +
+      "in the folder each tool reads. They teach the tool to work through a review with the eddie CLI " +
+      "and to keep // eddie: anchors intact.",
+    AGENT_TOOLS.map((t) => ({
+      label: t.label,
+      hint: detected.includes(t.id) ? "Found in this vault" : undefined,
+      checked: detected.length ? detected.includes(t.id) : t.id === "claude",
+    })),
+    "Install"
+  );
+  if (!picked) return;
+  const tools = AGENT_TOOLS.filter((_, i) => picked[i]).map((t) => t.id);
+  if (!tools.length) {
+    new Notice("Eddie Doc: no tool selected, nothing installed.");
+    return;
+  }
+  const targets = skillTargets(tools, "project", "");
+  const out = await installSkills(storage, targets, eddieSkills(plugin.manifest.version));
+  const skipped = out.filter((o) => o.status === "skipped").length;
+  new Notice(
+    `Eddie Doc: agent skills ready in ${targets.map((t) => t.dir).join(", ")}.` +
+      (skipped ? ` ${skipped} skipped: a skill of that name exists that Eddie Doc did not write.` : ""),
+    8000
+  );
 }

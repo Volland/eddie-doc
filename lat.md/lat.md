@@ -5,5 +5,6 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[review-model]] — the review sidecar, rounds and mappings, numbering, layout and interop
 - [[obsidian]] — the Obsidian plugin: panel, editor markup, `.adoc` ownership, PDF preview, mobile
 - [[vscode]] — the VS Code extension and what it shares with Obsidian
+- [[agent-skills]] — the Agent Skills Eddie Doc installs for Claude Code, Codex, Cursor, Gemini CLI and Copilot
 - [[cli]] — the `eddie` command line: every editor command as a verb, its settings and distribution
 - [[tests]] — test specifications, each tied to the test that checks it

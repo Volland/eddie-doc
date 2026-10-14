@@ -134,3 +134,60 @@ class ConfirmModal extends Modal {
 export function confirm(app: App, title: string, detail: string, cta: string): Promise<boolean> {
   return new Promise((resolve) => new ConfirmModal(app, title, detail, cta, resolve).open());
 }
+
+export interface CheckItem {
+  label: string;
+  hint?: string;
+  checked: boolean;
+}
+
+class ChecklistModal extends Modal {
+  private ok = false;
+  constructor(
+    app: App,
+    private readonly title: string,
+    private readonly detail: string,
+    private readonly items: CheckItem[],
+    private readonly cta: string,
+    private readonly done: (picked: boolean[] | undefined) => void
+  ) {
+    super(app);
+  }
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: this.title });
+    if (this.detail) contentEl.createEl("p", { text: this.detail, cls: "eddie-modal-detail" });
+    for (const item of this.items) {
+      new Setting(contentEl)
+        .setName(item.label)
+        .setDesc(item.hint ?? "")
+        .addToggle((t) => t.setValue(item.checked).onChange((v) => (item.checked = v)));
+    }
+    new Setting(contentEl)
+      .addButton((b) =>
+        b
+          .setButtonText(this.cta)
+          .setCta()
+          .onClick(() => {
+            this.ok = true;
+            this.close();
+          })
+      )
+      .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()));
+  }
+  onClose(): void {
+    this.contentEl.empty();
+    this.done(this.ok ? this.items.map((i) => i.checked) : undefined);
+  }
+}
+
+/** Tick any of `items`. Resolves each one's state, or undefined when cancelled. */
+export function checklist(
+  app: App,
+  title: string,
+  detail: string,
+  items: CheckItem[],
+  cta: string
+): Promise<boolean[] | undefined> {
+  return new Promise((resolve) => new ChecklistModal(app, title, detail, items, cta, resolve).open());
+}

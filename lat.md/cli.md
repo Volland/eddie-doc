@@ -6,7 +6,7 @@
 
 Each command in [[src/hosts/cli/commands.ts#COMMANDS]] mirrors one editor command and calls the same store method the editor does.
 
-`open`, `append`, `merge`, `rounds`, `describe`, `delete` and `remap` manage rounds and mappings; `list`, `show`, `resolve`, `reopen`, `confirm`, `relink`, `remap-item`, `triage`, `reply` and `preview` act on annotations; `apply`, `fix`, `anchor` and `strip` edit the source; `report`, `stamp`, `extract` and `map` produce outputs; `status`, `tui`, `folder`, `migrate`, `config` and `version` cover the workspace. `rounds` without a source lists every mapping in the workspace.
+`open`, `append`, `merge`, `rounds`, `describe`, `delete` and `remap` manage rounds and mappings; `list`, `show`, `resolve`, `reopen`, `confirm`, `relink`, `remap-item`, `triage`, `reply` and `preview` act on annotations; `apply`, `fix`, `anchor` and `strip` edit the source; `report`, `stamp`, `extract` and `map` produce outputs; `status`, `tui`, `skills`, `folder`, `migrate`, `config` and `version` cover the workspace. `rounds` without a source lists every mapping in the workspace.
 
 Where the editor asks in a dialog, the CLI takes a flag. Where the editor confirms a change to the manuscript or a deletion, the CLI asks on a terminal and requires `--yes` when there is none. `map` and the `stamp --review` / `anchor --review` forms keep their original output byte for byte, which `npm run verify:cli` checks against a snapshot.
 

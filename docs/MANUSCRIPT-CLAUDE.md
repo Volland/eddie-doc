@@ -1,5 +1,11 @@
 # Instructions for agents editing an anchored manuscript
 
+> **Easier:** run `eddie skills` in the manuscript repo (or *Eddie Doc: Install
+> Agent Skills for AI Tools…* in VS Code). It installs these rules as the
+> `eddie-anchors` skill, plus `eddie-review` and `eddie-pipeline`, in the folders
+> Claude Code, Codex, Cursor, Gemini CLI and Copilot read. Copy the block below by
+> hand only for a tool that does not load Agent Skills.
+
 Copy the block below into the `CLAUDE.md` (or `AGENTS.md`) of the repo that holds
 your `.adoc` files — not this repo. It tells a coding agent how to treat
 `// eddie:<id>` anchors while rewriting your prose.

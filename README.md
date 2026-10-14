@@ -570,7 +570,14 @@ eddie reply  src/ch04.adoc 7 "Reworded."  &&  eddie resolve src/ch04.adoc 7
 eddie apply  src/ch04.adoc --dry-run
 eddie stamp  build/ch04.pdf src/ch04.adoc
 eddie tui                                # browse and act full-screen
+eddie skills                             # teach Claude Code, Codex, Cursor… to use eddie
 ```
+
+**Skills for AI coding agents.** *Eddie Doc: Install Agent Skills for AI Tools…*
+(or `eddie skills`) asks which tools you use (Claude Code, Codex, Cursor, Gemini
+CLI, Copilot, others) and installs three Agent Skills where each one looks:
+`eddie-review` (work through remarks), `eddie-anchors` (keep `// eddie:` lines
+intact) and `eddie-pipeline` (rounds, reports, stamping, CI).
 
 The full command reference, configuration, JSON output and CI recipes are in
 [packages/cli/README.md](packages/cli/README.md), which is also the npm

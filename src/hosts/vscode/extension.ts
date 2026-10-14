@@ -59,6 +59,7 @@ import {
   openCliTerminal,
   type CliInstall,
 } from "./cli.js";
+import { installAgentSkills } from "./skills.js";
 import {
   ReviewCommentController,
   type ReviewComment,
@@ -420,6 +421,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const c = needCli();
       if (c) await installOnShellPath(c);
     }),
+    vscode.commands.registerCommand("eddieDoc.installSkills", () => installAgentSkills()),
     vscode.commands.registerCommand("eddieDoc.openCliTerminal", () => {
       const c = needCli();
       if (c) openCliTerminal(c);

@@ -110,7 +110,33 @@ Mapping writes into the review folder and anchors the source; remarks are listed
 
 The full-screen browser must navigate, act and write the sidecar exactly as the commands do, and fit any screen it is given.
 
-It skips single-choice levels, keeps every line within the width, goes back and quits; resolves, replies and relinks to a typed line; filters by group and text; applies a fix only after showing the diff and confirming; offers ranked triage lines; and lists every key on `?`.
+It skips single-choice levels, keeps every line within the width, goes back and quits; resolves, replies and relinks to a typed line; filters by group and text; applies a fix only after showing the diff and confirming; offers ranked triage lines; lists every key on `?`; and on `S` asks which AI tools are in use with a checklist, then installs the agent skills where they look.
+
+## Agent skills
+
+The skills Eddie Doc installs for AI coding tools, and the installer every Host uses.
+
+### Skill files follow the format
+
+Each skill must have the `name` and `description` frontmatter tools require, within the format's limits, and be recognisable as Eddie's.
+
+A same-named skill without Eddie's marker is someone else's. Every `eddie <command>` the skills mention, and every command the CLI has, must appear correctly in the reference.
+
+### Folders per tool
+
+The installer must reach every chosen tool with the fewest folders.
+
+One `.claude/skills` copy serves Claude Code, Cursor and Copilot; Codex needs `.agents/skills`; every folder reports all the chosen tools that read it; tool names parse loosely; tools are detected from their files.
+
+### Installing safely
+
+Installing must report installed, unchanged and updated, write nothing on a dry run, and never overwrite or remove a skill Eddie Doc did not write unless forced.
+
+### Asking which tools from the CLI
+
+`eddie skills` must ask which tools and where on a terminal, preselecting detected tools, and take flags in a script.
+
+It re-asks on a bad answer, fails with a usage error when it cannot tell, lists what is installed, removes only with `--yes` and tidies the empty folders, refuses to overwrite a user's skill without `--force`, and prints a skill.
 
 ## Annotation view
 

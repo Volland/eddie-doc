@@ -14,6 +14,10 @@ The extension ships the `eddie` CLI and makes it usable without a Node install: 
 
 [[src/hosts/vscode/cli.ts#installCliFiles]] copies `dist/cli.js` and its pdfjs worker into global storage, because the extension's own folder is renamed on every update, and writes an `eddie` launcher that runs them on VS Code's runtime with `ELECTRON_RUN_AS_NODE`, falling back to `node`. [[src/hosts/vscode/cli.ts#exposeOnTerminalPath]] prepends that folder to terminal PATHs (setting `eddieDoc.cli.addToTerminalPath`). The commands `Install 'eddie' Command in PATH` and `Open Terminal with Eddie CLI` cover other shells. The CLI itself is described in [[cli]].
 
+## Agent skills command
+
+*Install Agent Skills for AI Tools…* asks which AI coding tools the author uses and where, then installs Eddie's skills; see [[agent-skills#Entry points]].
+
 ## Sidecars changed on disk
 
 A sidecar changed outside the window, by `eddie` in a terminal, a sync client or another editor, is re-read so the tree shows what is on disk.

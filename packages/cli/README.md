@@ -37,6 +37,7 @@ Open (24)
 - [Choosing a document, mapping and annotation](#choosing-a-document-mapping-and-annotation)
 - [Command reference](#command-reference)
 - [Interactive mode: `eddie tui`](#interactive-mode-eddie-tui)
+- [Skills for AI coding agents: `eddie skills`](#skills-for-ai-coding-agents-eddie-skills)
 - [Configuration](#configuration)
 - [Scripting: JSON output and exit codes](#scripting-json-output-and-exit-codes)
 - [Recipes](#recipes)
@@ -534,6 +535,7 @@ is accepted as a short form.
 | Command | Does |
 | --- | --- |
 | `eddie tui [source.adoc]` (aliases `browse`, `ui`) | Full-screen browser; see [Interactive mode](#interactive-mode-eddie-tui). |
+| `eddie skills [install, list, remove, show]` | Install the agent skills for Claude Code, Codex, Cursor, Gemini CLI, Copilot; see [Skills](#skills-for-ai-coding-agents-eddie-skills). |
 | `eddie status` (alias `reviews`) | Every reviewed document in the workspace, with open counts, rounds and the newest mapping. *VS Code: Switch Review.* |
 | `eddie folder [source.adoc] [--open]` | The review folder, or one document's folder in it. *VS Code: Open Review Folder.* |
 | `eddie migrate [--dry-run] [--yes]` | Moves old-layout sidecars (beside each `.adoc`) into the review folder, rewriting their relative paths. *VS Code: Move Reviews into Review Folder.* |
@@ -594,6 +596,7 @@ marked: relationships at the center of the model
 | `Esc` / `←` / `Backspace` | everywhere | Back. |
 | `q`, `Ctrl-C` | everywhere | Quit. |
 | `?` | everywhere | All keys. |
+| `S` | everywhere | Install agent skills: tick the AI tools you use, then project or user. |
 | `R` | mappings | Re-map every round of the document. |
 | `p` | mappings | Export the mapping's report. |
 | `r` | annotations | Resolve / reopen. |
@@ -611,6 +614,73 @@ marked: relationships at the center of the model
 Every action saves immediately, to the same files the other commands use, so an
 open VS Code window updates. Set `NO_COLOR=1` for monochrome. `tui` needs an
 interactive terminal; in scripts use `list`, `show` and `rounds`.
+
+## Skills for AI coding agents: `eddie skills`
+
+Eddie ships three [Agent Skills](https://agentskills.io) that teach an AI coding
+tool to use it properly:
+
+| Skill | Teaches |
+| --- | --- |
+| `eddie-review` | Working through an editor's remarks: list, read in context, edit, reply, resolve, apply, triage. Includes a command reference. |
+| `eddie-anchors` | Keeping `// eddie:` anchor lines intact while rewriting `.adoc` files, so marks stay on the right paragraphs. |
+| `eddie-pipeline` | Mapping a newly returned PDF, rounds, reports, stamping, and CI automation. |
+
+```console
+$ eddie skills
+Which AI coding tools do you use? Eddie's skills will be installed where each one looks.
+  1) Claude Code   (found here)
+  2) OpenAI Codex
+  3) Cursor
+  4) Gemini CLI
+  5) GitHub Copilot
+  6) Other (any tool that reads .agents/skills: OpenCode, Amp, Kiro…)
+Numbers separated by commas, or "a" for all [1]: 1,3
+Install for:
+  p) this project — /work/book   (commit them so collaborators get them)
+  u) your user account — /Users/me   (every project on this machine)
+p or u [p]: p
+.claude/skills
+  installed eddie-review
+  installed eddie-anchors
+  installed eddie-pipeline
+```
+
+Tools already in use are found from their files (`CLAUDE.md`, `.cursor/`,
+`.gemini/`, …) and offered as the default. Each tool reads skills from its own
+folders, and Eddie writes the fewest copies that reach all the tools you picked:
+
+| Tool | Project folder | User folder |
+| --- | --- | --- |
+| Claude Code | `.claude/skills` | `~/.claude/skills` |
+| OpenAI Codex | `.agents/skills` | `~/.agents/skills` |
+| Cursor | `.agents/skills` (also reads `.cursor/`, `.claude/`, `.codex/skills`) | same under `~` |
+| Gemini CLI | `.agents/skills` (or `.gemini/skills`) | same under `~` |
+| GitHub Copilot | `.agents/skills` (also `.github/`, `.claude/skills`) | `~/.agents/skills` (or `~/.copilot/skills`) |
+| Other tools | `.agents/skills` | `~/.agents/skills` |
+
+So Claude Code with Cursor is one copy in `.claude/skills`, while Claude Code with
+Codex needs `.claude/skills` and `.agents/skills`. A tool that reads both folders
+then sees each skill twice, which is harmless.
+
+```bash
+eddie skills install --tool claude,codex          # in a script: no questions
+eddie skills install --all --scope user           # every tool, for your account
+eddie skills list                                 # what is installed where, which version
+eddie skills install                              # again after upgrading eddie: updates them
+eddie skills remove --yes                         # take them out
+eddie skills show eddie-review                    # read one
+```
+
+Each installed `SKILL.md` records `generator: eddie-doc` and the version that
+wrote it. Eddie updates and removes only its own skills. A skill of the same name
+that you wrote is never replaced (unless `--force`) and never removed. Without
+`--tool` and without a terminal, Eddie installs for the tools it detects, and
+fails with a usage error if there are none.
+
+The same installer is in the editors: **Eddie Doc: Install Agent Skills for AI
+Tools…** in VS Code, **Install agent skills for AI tools…** in Obsidian (into the
+vault), and the `S` key in `eddie tui`.
 
 ## Configuration
 
@@ -775,7 +845,8 @@ asciidoctor-pdf -o build/ch04.pdf ch04.adoc && eddie stamp build/ch04.pdf ch04.a
 
 ### With an AI coding agent
 
-Every command can run without prompts (`--yes`) and produce JSON (`--json`), so
+Install the skills first (`eddie skills`); the agent then knows the workflow
+below, the anchor rules, and every command. Every command can run without prompts (`--yes`) and produce JSON (`--json`), so
 an agent can work through a review: list the open remarks, read each with
 `eddie show`, edit the prose, then `eddie reply` and `eddie resolve`. The
 remarks it handles show up as answered in VS Code and Obsidian, and in the

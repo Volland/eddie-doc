@@ -112,6 +112,12 @@ Where a device cannot do something the plugin turns the feature off instead of f
 
 [[src/hosts/obsidian/host.ts#detectCapabilities]]: the semantic fallback needs a localhost Ollama server and is desktop-only, and it goes through Obsidian's `requestUrl` so CORS cannot block it. Reading a file from outside the vault is desktop-only, and the file is copied into the vault.
 
+## Agent skills command
+
+*Install agent skills for AI tools…* asks with a checklist which tools are in use and writes the skills into the vault's `.claude/skills` or `.agents/skills`; see [[agent-skills]].
+
+Those are dot folders, so they go through the adapter, as other hidden paths do. There is no user-wide option, since a plugin cannot reach the home folder on mobile.
+
 ## Distribution
 
 A release is three files, `main.js`, `manifest.json` and `styles.css`, built and attested by CI and attached to a GitHub release with the repository's version.
