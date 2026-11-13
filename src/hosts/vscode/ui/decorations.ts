@@ -126,7 +126,7 @@ function buildHover(items: ReviewItem[]): vscode.MarkdownString {
       )}`
     );
     md.appendMarkdown(
-      `[${it.resolved ? "Mark open" : "Mark resolved"}](${toggle})\n\n---\n\n`
+      `[${it.resolved ? "Mark open" : "Mark resolved"}](${toggle.toString()})\n\n---\n\n`
     );
   }
   return md;

@@ -23,6 +23,11 @@ import { useNodePdfEngine } from "../../node/pdfEngine.js";
 import { extractAnnotations } from "../../../core/pdf/extract.js";
 import { scoreItems, type BenchSummary, type GoldenCase } from "./score.js";
 
+/** The report goes to stdout, so `--json` can be piped; the bundle's guard would send `console.log` to stderr. */
+function out(line = ""): void {
+  process.stdout.write(line + "\n");
+}
+
 interface GoldenFile {
   source: string;
   pdf: string;
@@ -90,22 +95,22 @@ async function main() {
     totalCorrect += summary.correct;
 
     if (!asJson) {
-      console.log(`\n${path.basename(f)}  (threshold ${threshold}${lexical ? ", +lexical" : ""})`);
+      out(`\n${path.basename(f)}  (threshold ${threshold}${lexical ? ", +lexical" : ""})`);
       for (const r of summary.results) {
         const icon = STATUS_ICON[r.status] ?? "?";
         const tail =
           r.status === "correct"
             ? `→ ${r.got}`
             : `→ ${r.got}, expected ${r.expected}  [${r.status}]`;
-        console.log(`  ${icon} "${r.key}" ${tail}`);
+        out(`  ${icon} "${r.key}" ${tail}`);
       }
     }
   }
 
   if (asJson) {
-    console.log(JSON.stringify({ threshold, lexical, files: perFile }, null, 2));
+    out(JSON.stringify({ threshold, lexical, files: perFile }, null, 2));
   } else {
-    console.log(
+    out(
       `\n${totalCorrect}/${totalCases} correct` +
         (totalCorrect === totalCases ? "" : ` — ${totalCases - totalCorrect} failing`)
     );
@@ -114,6 +119,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  process.stderr.write(String(e instanceof Error && e.stack ? e.stack : e) + "\n");
   process.exit(2);
 });

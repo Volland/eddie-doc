@@ -75,8 +75,8 @@ export class EddieCodeActionProvider implements vscode.CodeActionProvider {
   ): ReviewItem[] {
     const ids = new Set(
       context.diagnostics
-        .filter(DiagnosticsManager.isOurs)
-        .map((d) => String(d.code))
+        .filter((d) => DiagnosticsManager.isOurs(d))
+        .map((d) => (typeof d.code === "object" ? String(d.code.value) : String(d.code)))
     );
     const seen = new Set<string>();
     const out: ReviewItem[] = [];

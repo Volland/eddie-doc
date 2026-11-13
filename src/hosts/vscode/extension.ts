@@ -2609,16 +2609,16 @@ interface ItemRef {
 /** Accept a tree ItemNode, a bare id, or [id] (from a hover command link). */
 function resolveItemRef(store: ReviewStore, arg: unknown): ItemRef | undefined {
   // Tree node: { type: 'item', item, adocPath }
+  const node = arg as { type?: unknown; item?: { id?: unknown }; adocPath?: unknown } | null | undefined;
   if (
-    arg &&
-    typeof arg === "object" &&
-    (arg as any).type === "item" &&
-    (arg as any).item
+    node &&
+    typeof node === "object" &&
+    node.type === "item" &&
+    node.item &&
+    typeof node.item.id === "string" &&
+    typeof node.adocPath === "string"
   ) {
-    return {
-      adocPath: (arg as any).adocPath,
-      id: (arg as any).item.id,
-    };
+    return { adocPath: node.adocPath, id: node.item.id };
   }
   const id =
     typeof arg === "string"

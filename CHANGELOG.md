@@ -12,6 +12,9 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   and removed an unused import, an unnecessary type assertion and two `any` leaks in the
   CLI and the VS Code CLI installer. `docs/obsidian-publish.md` now says how to run the
   review's linter locally.
+- The VS Code host no longer uses `any` to read a tree node, passes an unbound method to
+  `filter`, or interpolates a `Uri` into a template. The benchmark (`npm run bench`)
+  writes its report to stdout instead of `console.log`, so `--json` can be piped.
 
 ### Added
 
