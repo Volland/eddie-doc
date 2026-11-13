@@ -115,6 +115,35 @@ The old entry format (`id`, `name`, `author`, `description`, `repo`) is now read
 - `versions.json` maps each plugin version to its minimum Obsidian version; the hook adds a line per release. If `minAppVersion` ever rises, older Obsidians keep the last compatible release.
 - Keep `CHANGELOG.md` current; the release notes are generated from commits, the changelog is the human-written record.
 
+## Run the review's linter before submitting
+
+The community review lints the **whole of `src/`**, not just the Obsidian host, so the CLI and the VS Code host are read too. An *error* fails the review; warnings do not. Run the same ruleset locally from the repo root, with the packages installed outside the repo so they add nothing to it:
+
+```bash
+mkdir -p /tmp/eddie-lint && cd /tmp/eddie-lint && npm init -y
+npm i --legacy-peer-deps eslint eslint-plugin-obsidianmd typescript-eslint @eslint/js typescript@5
+```
+
+Then save this as `/tmp/eddie-lint/eslint.config.mjs`:
+
+```js
+import { defineConfig, globalIgnores } from "eslint/config";
+import obsidianmd from "eslint-plugin-obsidianmd";
+export default defineConfig([
+  globalIgnores(["node_modules", "dist", "out", "scripts", "site", "esbuild.js", "src/test"]),
+  ...obsidianmd.configs.recommended,
+  { languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: process.cwd() } } },
+]);
+```
+
+and run it from the repo root:
+
+```bash
+node /tmp/eddie-lint/node_modules/eslint/bin/eslint.js -c /tmp/eddie-lint/eslint.config.mjs src
+```
+
+Some of what it reports cannot be fixed, because the code is not for Obsidian: `node:*` imports in the CLI, the Node host and the VS Code host, and `fetch` in the Node hosts. Those are warnings. The rules to hold to: no `eslint-disable` or other directive comments anywhere (the 1.4.5 review flagged one; write code that does not need one), no `any` leaking out of `JSON.parse`, and no assertion that does not change a type.
+
 ## Open work
 
 The OpenSpec change `obsidian-plugin` was archived with 24 of its 80 tasks open (`openspec/changes/archive/*-obsidian-plugin/tasks.md` has each, with its status). The ones that matter, in the order to do them:

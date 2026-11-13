@@ -102,7 +102,7 @@ export function settingKey(name: string): keyof Settings | undefined {
 function readJson(file: string): Record<string, unknown> | undefined {
   if (!existsSync(file)) return undefined;
   try {
-    const v = JSON.parse(stripJsonc(readFileSync(file, "utf8")));
+    const v: unknown = JSON.parse(stripJsonc(readFileSync(file, "utf8")));
     return v && typeof v === "object" ? (v as Record<string, unknown>) : undefined;
   } catch (e) {
     throw new UsageError(`cannot parse ${file}: ${(e as Error).message}`);

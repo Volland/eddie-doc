@@ -71,13 +71,13 @@ export async function writeReport(
 
 /** Open a file or folder with the platform's default application. */
 export function openFile(target: string): void {
-  const [cmd, args] =
+  const [cmd, args]: [string, string[]] =
     process.platform === "darwin"
       ? ["open", [target]]
       : process.platform === "win32"
         ? ["cmd", ["/c", "start", "", target]]
         : ["xdg-open", [target]];
-  spawn(cmd, args as string[], { detached: true, stdio: "ignore" }).unref();
+  spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
 }
 
 // -- agent skills ---------------------------------------------------------------

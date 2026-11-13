@@ -12,7 +12,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
-import { effectiveLine, isConfident } from "../../../core/matching/mapper.js";
+import { isConfident } from "../../../core/matching/mapper.js";
 import { buildSourceIndex, topMatches } from "../../../core/matching/fuzzyMatch.js";
 import {
   applyEdits,
@@ -408,7 +408,7 @@ export class TuiApp {
       return;
     }
     const s = k.sequence ?? "";
-    if (!k.ctrl && !k.meta && s && !/[\x00-\x1f\x7f]/.test(s)) inp.value += s;
+    if (!k.ctrl && !k.meta && s && !hasControl(s)) inp.value += s;
   }
 
   private async mappingsKey(v: MappingsView, ch: string | undefined, enter: boolean): Promise<void> {
@@ -974,6 +974,27 @@ export function wrap(text: string, width: number): string[] {
 
 /** Strip ANSI codes, for tests and width checks. */
 export function stripAnsi(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    // A colour code is ESC [ digits/semicolons m; anything else is kept as it is.
+    if (s.charCodeAt(i) === 27 && s[i + 1] === "[") {
+      let j = i + 2;
+      while (j < s.length && /[0-9;]/.test(s[j])) j++;
+      if (s[j] === "m") {
+        i = j;
+        continue;
+      }
+    }
+    out += s[i];
+  }
+  return out;
+}
+
+/** True when `s` holds a control character (below space, or DEL). */
+function hasControl(s: string): boolean {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 32 || c === 127) return true;
+  }
+  return false;
 }

@@ -45,7 +45,8 @@ export function installCliFiles(context: vscode.ExtensionContext): CliInstall | 
   const binDir = path.join(context.globalStorageUri.fsPath, "bin");
   fs.mkdirSync(binDir, { recursive: true });
 
-  const version = String(context.extension.packageJSON.version ?? "");
+  const manifest = context.extension.packageJSON as { version?: string };
+  const version = String(manifest.version ?? "");
   const stamp = path.join(binDir, "VERSION");
   let installed = "";
   try {

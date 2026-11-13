@@ -22,7 +22,7 @@ import type { Io } from "./workspace.js";
 // pdf.worker.mjs is copied beside this bundle by esbuild.
 declare const __dirname: string;
 useNodePdfEngine(path.join(__dirname, "pdf.worker.mjs"));
-setUiScheduler((run) => void setTimeout(run, 0));
+setUiScheduler((run) => void setImmediate(run)); // a macrotask: the CLI's I/O interleaves between pages
 
 const io: Io = {
   out: (line = "") => void process.stdout.write(line + "\n"),

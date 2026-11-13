@@ -23,15 +23,15 @@ import type { LoadedSettings } from "./config.js";
 /** Where a command writes. Results to stdout, everything else to stderr. */
 export interface Io {
   /** A result line — the only channel machine-readable output may use. */
-  out(line?: string): void;
+  out: (line?: string) => void;
   /** A diagnostic or progress line, always stderr. */
-  note(line?: string): void;
+  note: (line?: string) => void;
   /** Ask a question on the terminal; resolves to the trimmed answer. */
-  ask(question: string): Promise<string>;
+  ask: (question: string) => Promise<string>;
   /** True when a person is at the keyboard (stdin and stderr are TTYs). */
   interactive: boolean;
   /** Read all of stdin, for `-` arguments. */
-  readStdin(): Promise<string>;
+  readStdin: () => Promise<string>;
 }
 
 export interface WorkspaceOptions {

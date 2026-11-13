@@ -3,7 +3,7 @@ import {
   getDocument,
   GlobalWorkerOptions,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { setPdfEngine, type PdfEngine } from "../../core/pdf/engine.js";
+import { setPdfEngine } from "../../core/pdf/engine.js";
 
 /**
  * Install pdfjs's legacy (Node) build as the core's PDF engine.

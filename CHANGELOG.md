@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Community-directory review: removed the one `eslint-disable` directive comment (an
+  error), rewrote the two control-character regexes in the terminal UI as plain loops,
+  and removed an unused import, an unnecessary type assertion and two `any` leaks in the
+  CLI and the VS Code CLI installer. `docs/obsidian-publish.md` now says how to run the
+  review's linter locally.
+
 ### Added
 
 - **Agent Skills for AI coding tools.** Three skills: `eddie-review` (work through an
